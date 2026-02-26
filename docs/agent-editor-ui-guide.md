@@ -44,11 +44,11 @@ The editor uses a **three-column layout** similar to n8n:
    - **Back** — return to the Workflows list.
    - **Workflow name** — editable name; click **Save** to persist.
    - **Entry: &lt;id&gt;** — which node is the entry (set in the **right** panel when a node is selected).
-   - **Layout** — arranges the graph in an orchestrator-style flow. If an **entry node** is set: entry is on the **left**, and nodes that feed into it (sub-agents, then LLMs) fan out to the **right** with clear vertical spacing for parallel branches. If no entry is set: roots (e.g. LLMs) are on the left, entry/sinks on the right.
+   - **Layout** — arranges the graph in an orchestrator-style flow. If an **entry node** is set: entry is on the **left**, the main execution flow goes to the **right**, and dependency nodes (LLM/router/tool) are attached **below** their parent nodes with dashed links. If no entry is set: nodes are arranged left-to-right by dependency depth.
    - **Save**, **Run**, **Delete** — save the workflow, run it, or delete it (Run/Delete only for saved workflows).
 
 2. **Left panel — Add step + Agents**
-   - A vertical list of node types: **LLM**, **Agent**, **Supervisor**, **Sequence**, **Parallel**, **Conditional**.
+   - A vertical list of node types: **LLM**, **Agent**, **Supervisor**, **Sequence**, **Parallel**, **Conditional** (each with a dedicated icon).
    - Click a type to add that node to the **center** canvas.
    - Includes an **Agents** list (agent + supervisor nodes already in the workflow). Click one to focus/select it on the canvas.
 
@@ -64,7 +64,8 @@ The editor uses a **three-column layout** similar to n8n:
    - When a **node is selected**: shows **Node configuration** (ID, type-specific fields), **Dependencies** (Uses / Used by, like a DSL), **Set as entry**, **Delete node**.
 
 5. **Dependencies and edges**
-   - **Edges** on the canvas show relationship labels (e.g. “uses LLM”, “sub-agent”, “router”, “branch”) so the graph reads like a DSL.
+   - **Edges** on the canvas show relationship labels (e.g. “model”, “delegates”, “router”, “tool”, “branch”) so the graph reads like a DSL.
+   - Main orchestration links use side handles; dependency links use top/bottom handles.
    - In the right panel, **Dependencies** for the selected node lists **Uses** (nodes this one depends on) and **Used by** (nodes that depend on this one).
 
 ---
@@ -75,6 +76,7 @@ The editor uses a **three-column layout** similar to n8n:
 
 - In the left panel, under **Add node**, click a type: **LLM**, **Agent**, **Supervisor**, **Sequence**, **Parallel**, **Conditional**.
 - A new node appears on the canvas. You can drag it to position it.
+- When you add an **Agent** or **Supervisor**, the editor also auto-creates a dedicated **LLM** node and links it (`llmId`) as a pair.
 
 **Rough meaning of node types:**
 
@@ -95,11 +97,12 @@ The editor uses a **three-column layout** similar to n8n:
 - **Click** a node on the canvas to select it.
 - The **right panel** shows **Node configuration** with:
   - **ID** — unique identifier (used in connections and as entry).
-  - **Type-specific fields** — e.g. for LLM: Base URL, Model; for Agent: Name, LLM ID, Output key, Tool IDs, plus:
+  - **Type-specific fields** — e.g. for LLM: Base URL, Model, Temperature, Max tokens; for Agent: Name, LLM ID, Output key, Tool IDs, plus:
     - **Role** — short role label for that agent.
     - **System message** — system instruction for that specific agent/sub-agent.
     - **Prompt template** — per-agent prompt template. Supports placeholders like `{{metadata.prompt}}`, `{{metadata.topic}}`, `{{metadata.style}}`.
 - **Set as entry** — mark this node as the one that runs when you click **Run**. Exactly one node should be the entry (usually a Sequence or Supervisor; `parallel` is often better as an inner step).
+- **Set as entry** — only **Sequence**, **Parallel**, or **Supervisor** nodes can be marked as entry.
 - **Delete node** — remove this node from the canvas (and any edges to/from it). You can also select the node and press **Delete** or **Backspace**.
 
 ### 4.4 Save

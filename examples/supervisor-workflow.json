@@ -2,11 +2,16 @@
   "name": "Supervisor workflow",
   "entryNodeId": "sup",
   "nodes": [
-    { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
+    { "id": "llm-supervisor", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.2, "maxTokens": 500 },
+    { "id": "llm-assistant", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.35, "maxTokens": 500 },
+    { "id": "llm-writer", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.9, "maxTokens": 900 },
+    { "id": "llm-editor", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.2, "maxTokens": 700 },
+    { "id": "llm-movies", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.55, "maxTokens": 500 },
+    { "id": "llm-meals", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.65, "maxTokens": 500 },
     {
       "id": "assistant",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-assistant",
       "name": "Assistant",
       "role": "General assistant",
       "promptTemplate": "Help with: {{metadata.prompt}}",
@@ -16,7 +21,7 @@
     {
       "id": "writer",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-writer",
       "name": "Writer",
       "role": "Story writer",
       "promptTemplate": "Write a short story about {{metadata.topic}} in {{metadata.style}} style.",
@@ -25,18 +30,18 @@
     {
       "id": "editor",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-editor",
       "name": "Editor",
       "role": "Story editor",
       "systemMessage": "Polish prose without changing intent.",
-      "promptTemplate": "Edit for style and clarity.",
+      "promptTemplate": "Edit this draft for style and clarity:\\n\\n{{story}}",
       "outputKey": "story"
     },
     { "id": "seq-story", "type": "sequence", "subAgentIds": ["writer", "editor"], "outputKey": "story" },
     {
       "id": "movies",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-movies",
       "name": "MovieExpert",
       "role": "Movie recommender",
       "promptTemplate": "Suggest one movie for a {{metadata.mood}} mood.",
@@ -45,13 +50,13 @@
     {
       "id": "meals",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-meals",
       "name": "MealExpert",
       "role": "Meal recommender",
       "promptTemplate": "Suggest one dinner idea for a {{metadata.mood}} mood.",
       "outputKey": "meals"
     },
     { "id": "parallel-plan", "type": "parallel", "subAgentIds": ["movies", "meals"], "outputKey": "plan" },
-    { "id": "sup", "type": "supervisor", "llmId": "llm-1", "subAgentIds": ["assistant", "seq-story", "parallel-plan"], "responseStrategy": "LAST", "outputKey": "response" }
+    { "id": "sup", "type": "supervisor", "llmId": "llm-supervisor", "subAgentIds": ["assistant", "seq-story", "parallel-plan"], "responseStrategy": "LAST", "outputKey": "response" }
   ]
 }

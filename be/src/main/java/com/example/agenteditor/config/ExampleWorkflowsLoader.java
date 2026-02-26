@@ -1,6 +1,8 @@
 package com.example.agenteditor.config;
 
 import com.example.agenteditor.api.v1.dto.WorkflowCreateRequest;
+import com.example.agenteditor.api.v1.dto.WorkflowUpdateRequest;
+import com.example.agenteditor.domain.WorkflowDefinition;
 import com.example.agenteditor.repository.WorkflowDefinitionRepository;
 import com.example.agenteditor.service.WorkflowDefinitionService;
 
@@ -19,10 +21,11 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Loads example workflow definitions from classpath resources into the database at startup.
- * Skips any example that already exists (by name) so re-runs are idempotent.
+ * Existing examples are updated in place (by name) so sample workflows stay in sync.
  */
 @Component
 @RequiredArgsConstructor
@@ -56,12 +59,17 @@ public class ExampleWorkflowsLoader implements ApplicationRunner {
         }
         try (InputStream in = resource.getInputStream()) {
             WorkflowCreateRequest request = jsonMapper.readValue(in, WorkflowCreateRequest.class);
-            if (repository.findByName(request.name()).isPresent()) {
-                log.debug("Example workflow already present, skipping: {}", request.name());
-                return;
+            Optional<WorkflowDefinition> existing = repository.findByName(request.name());
+            if (existing.isPresent()) {
+                service.update(
+                        existing.get().getId(),
+                        new WorkflowUpdateRequest(request.name(), request.entryNodeId(), request.nodes())
+                );
+                log.info("Updated example workflow: {}", request.name());
+            } else {
+                service.create(request);
+                log.info("Loaded example workflow: {}", request.name());
             }
-            service.create(request);
-            log.info("Loaded example workflow: {}", request.name());
         } catch (JacksonException e) {
             log.error("Failed to parse example workflow {}: {}", path, e.getMessage());
         } catch (IOException e) {

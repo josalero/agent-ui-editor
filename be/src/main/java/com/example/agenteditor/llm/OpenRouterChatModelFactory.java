@@ -37,13 +37,27 @@ public class OpenRouterChatModelFactory {
      * If either is null or blank, the configured default is used.
      */
     public ChatModel build(String baseUrl, String modelName) {
+        return build(baseUrl, modelName, null, null);
+    }
+
+    /**
+     * Builds a ChatModel using the given base URL/model plus optional generation settings.
+     * If baseUrl/modelName is null or blank, configured defaults are used.
+     */
+    public ChatModel build(String baseUrl, String modelName, Double temperature, Integer maxTokens) {
         String url = (baseUrl != null && !baseUrl.isBlank()) ? baseUrl.trim() : defaultBaseUrl;
         String model = (modelName != null && !modelName.isBlank()) ? modelName.trim() : defaultModel;
-        return OpenAiChatModel.builder()
+        var builder = OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(url)
                 .modelName(model)
-                .timeout(Duration.ofSeconds(120))
-                .build();
+                .timeout(Duration.ofSeconds(120));
+        if (temperature != null) {
+            builder.temperature(temperature);
+        }
+        if (maxTokens != null && maxTokens > 0) {
+            builder.maxTokens(maxTokens);
+        }
+        return builder.build();
     }
 }

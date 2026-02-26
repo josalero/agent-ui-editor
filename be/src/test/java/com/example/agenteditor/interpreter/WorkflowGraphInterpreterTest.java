@@ -59,9 +59,11 @@ class WorkflowGraphInterpreterTest {
             List<WorkflowNodeDto> nodes = List.of(
                     node("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null),
                     node("general", "agent", null, null, "llm-1", "GeneralExpert", "response",
-                            List.of("time", "calculator"), null, null, null, null, null)
+                            List.of("time", "calculator"), null, null, null, null, null),
+                    node("entry", "sequence", null, null, null, null, "response",
+                            null, List.of("general"), null, null, null, null)
             );
-            WorkflowRunnable runnable = interpreter.buildEntryRunnable("general", nodes);
+            WorkflowRunnable runnable = interpreter.buildEntryRunnable("entry", nodes);
             assertNotNull(runnable);
         }
 
@@ -83,7 +85,7 @@ class WorkflowGraphInterpreterTest {
         }
 
         @Test
-        @DisplayName("throws when entry node is not agent or sequence")
+        @DisplayName("throws when entry node type is not allowed")
         void throwsWhenEntryIsLlm() {
             List<WorkflowNodeDto> nodes = List.of(
                     node("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null)
@@ -223,12 +225,15 @@ class WorkflowGraphInterpreterTest {
                 type,
                 baseUrl,
                 modelName,
+                null,
+                null,
                 llmId,
                 name,
                 null,
                 null,
                 null,
                 outputKey,
+                null,
                 toolIds,
                 subAgentIds,
                 responseStrategy,

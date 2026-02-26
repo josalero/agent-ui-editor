@@ -50,6 +50,11 @@ class SampleWorkflowsIntegrationTest {
                 public ChatModel build(String baseUrl, String modelName) {
                     return new SampleWorkflowSmartStubModel();
                 }
+
+                @Override
+                public ChatModel build(String baseUrl, String modelName, Double temperature, Integer maxTokens) {
+                    return new SampleWorkflowSmartStubModel();
+                }
             };
         }
 
@@ -97,7 +102,10 @@ class SampleWorkflowsIntegrationTest {
                 reply = "DINNER_OPTION";
             } else if (joined.contains("write a short story")) {
                 reply = "STORY_DRAFT";
-            } else if (joined.contains("refine the draft") || joined.contains("edit for style and clarity")) {
+            } else if (joined.contains("refine the draft")
+                    || joined.contains("refine this draft")
+                    || joined.contains("edit for style and clarity")
+                    || joined.contains("edit this draft")) {
                 reply = "STORY_EDITED";
             } else if (joined.contains("answer clearly")) {
                 reply = "GENERAL_RESPONSE";
@@ -125,6 +133,59 @@ class SampleWorkflowsIntegrationTest {
 
     private String baseUrl() {
         return "http://localhost:" + port + "/api/v1/workflows";
+    }
+
+    @Test
+    @DisplayName("GET workflow returns agent nodes with tools (or toolIds) for canvas display")
+    void getWorkflowReturnsToolsOnAgentNodes() {
+        ResponseEntity<Map<String, Object>> samplesResp = restTemplate.exchange(
+                baseUrl() + "/samples",
+                HttpMethod.GET,
+                null,
+                new ParameterizedTypeReference<>() { }
+        );
+        assertThat(samplesResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(samplesResp.getBody()).isNotNull();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> sampleItems = (List<Map<String, Object>>) samplesResp.getBody().get("workflows");
+        String storyId = sampleItems.stream()
+                .filter(m -> "Story workflow".equals(m.get("name")))
+                .map(m -> String.valueOf(m.get("id")))
+                .findFirst()
+                .orElseThrow();
+
+        ResponseEntity<Map<String, Object>> getResp = restTemplate.exchange(
+                baseUrl() + "/" + storyId,
+                HttpMethod.GET,
+                null,
+                new ParameterizedTypeReference<>() { }
+        );
+        assertThat(getResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(getResp.getBody()).isNotNull();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> nodes = (List<Map<String, Object>>) getResp.getBody().get("nodes");
+        assertThat(nodes).isNotNull();
+
+        List<Map<String, Object>> agentNodes = nodes.stream()
+                .filter(n -> "agent".equals(n.get("type")))
+                .toList();
+        assertThat(agentNodes).isNotEmpty();
+
+        long agentsWithTools = agentNodes.stream()
+                .filter(n -> {
+                    Object tools = n.get("tools");
+                    if (tools instanceof List<?> list && !list.isEmpty()) {
+                        return true;
+                    }
+                    Object ids = n.get("toolIds");
+                    return ids instanceof List<?> list && !list.isEmpty();
+                })
+                .count();
+        assertThat(agentsWithTools)
+                .as("Story workflow agent nodes must have tools or toolIds so tools appear on canvas")
+                .isGreaterThanOrEqualTo(1);
     }
 
     @Test

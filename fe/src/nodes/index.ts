@@ -5,6 +5,7 @@ import SupervisorNode from './SupervisorNode'
 import SequenceNode from './SequenceNode'
 import ParallelNode from './ParallelNode'
 import ConditionalNode from './ConditionalNode'
+import ToolNode from './ToolNode'
 
 export const nodeTypes: NodeTypes = {
   llm: LlmNode,
@@ -13,6 +14,7 @@ export const nodeTypes: NodeTypes = {
   sequence: SequenceNode,
   parallel: ParallelNode,
   conditional: ConditionalNode,
+  tool: ToolNode,
 }
 
 export const NODE_KINDS = ['llm', 'agent', 'supervisor', 'sequence', 'parallel', 'conditional'] as const

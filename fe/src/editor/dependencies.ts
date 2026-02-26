@@ -2,12 +2,14 @@ import type { Node, Edge } from 'reactflow'
 import type { NodeData } from './nodeData'
 
 const LABELS: Record<string, string> = {
-  'llm→agent': 'uses LLM',
-  'llm→supervisor': 'uses LLM',
-  'agent→sequence': 'sub-agent',
-  'agent→parallel': 'sub-agent',
-  'agent→supervisor': 'sub-agent',
+  'llm→agent': 'model',
+  'llm→supervisor': 'model',
+  'agent→sequence': 'delegates',
+  'agent→parallel': 'delegates',
+  'agent→supervisor': 'delegates',
   'agent→conditional': 'router',
+  'agent→tool': 'tool',
+  'supervisor→tool': 'tool',
   'conditional→agent': 'branch',
 }
 
@@ -22,7 +24,7 @@ export function getEdgeLabel(nodes: Node<NodeData>[], edge: Edge): string {
   return edgeRole(source.data.type, target.data.type)
 }
 
-export type VisualEdgeKind = 'llm' | 'sub-agent' | 'router' | 'branch' | 'custom'
+export type VisualEdgeKind = 'llm' | 'sub-agent' | 'router' | 'branch' | 'tool' | 'custom'
 
 /**
  * Convert model/dependency edges into visual orchestration edges:
@@ -79,6 +81,17 @@ export function toVisualEdge(
     return { edge: { ...edge, id: `viz-${edge.id}` }, kind: 'sub-agent' }
   }
 
+  // Tool dependency: render agent/supervisor -> tool.
+  if ((sourceType === 'agent' || sourceType === 'supervisor') && targetType === 'tool') {
+    return { edge: { ...edge, id: `viz-${edge.id}` }, kind: 'tool' }
+  }
+  if ((targetType === 'agent' || targetType === 'supervisor') && sourceType === 'tool') {
+    return {
+      edge: { ...edge, id: `viz-${edge.id}`, source: target.id, target: source.id },
+      kind: 'tool',
+    }
+  }
+
   return { edge: { ...edge, id: `viz-${edge.id}` }, kind: 'custom' }
 }
 
@@ -112,6 +125,16 @@ export function getDependencies(
           const n = nodeMap.get(id)!
           uses.push({ id, label: `Sub: ${n.data?.name ?? n.data?.id ?? id}` })
         }
+      }
+    }
+    const hasToolVisualEdges = edges.some(
+      (e) => e.source === nodeId && nodeMap.get(e.target)?.data?.type === 'tool'
+    )
+    const toolRefs = (d.tools?.length ? d.tools : (d.toolIds ?? []).map((id: string) => ({ id }))) as { id: string; description?: string }[]
+    if (toolRefs.length > 0 && !hasToolVisualEdges) {
+      for (const t of toolRefs) {
+        const label = t.description ? `Tool: ${t.id} — ${t.description}` : `Tool: ${t.id}`
+        uses.push({ id: `${nodeId}:tool:${t.id}`, label })
       }
     }
     if (d.branches?.length) {
@@ -207,9 +230,8 @@ export function layoutByDependency(
 }
 
 /**
- * Layout with entry node on the LEFT and dependencies fanning to the right (orchestrator-style).
- * Like the diagram: Orchestrator → branches → agents → LLMs. Uses BFS backwards (entry = column 0,
- * nodes that feed into entry = column 1, etc.). Parallel branches get extra vertical spacing.
+ * Layout with entry node on the LEFT and primary flow to the RIGHT (orchestrator-style).
+ * Dependency nodes (LLM/router) are attached below their owner nodes to mimic "tool/model docks".
  */
 export function layoutFromEntry(
   entryNodeId: string,
@@ -219,8 +241,12 @@ export function layoutFromEntry(
 ): Node<NodeData>[] {
   const { columnWidth = 320, rowHeight = 150 } = options
   const branchGapUnits = 0.45
+  const dependencyXGap = Math.max(140, Math.floor(columnWidth * 0.55))
+  const dependencyYGap = Math.max(120, Math.floor(rowHeight * 0.9))
+  const dependencyPerRow = 3
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
-  const incomingByTarget = new Map<string, Set<string>>()
+  const outgoingBySource = new Map<string, Set<string>>()
+  const dependencyBySource = new Map<string, Set<string>>()
   const typeRank: Record<string, number> = {
     supervisor: 0,
     sequence: 1,
@@ -243,11 +269,24 @@ export function layoutFromEntry(
     return aLabel.localeCompare(bLabel)
   }
 
+  const primaryKinds = new Set<VisualEdgeKind>(['sub-agent', 'branch', 'custom'])
+  const dependencyKinds = new Set<VisualEdgeKind>(['llm', 'router'])
+
   for (const e of edges) {
     if (!nodeById.has(e.source) || !nodeById.has(e.target)) continue
-    const deps = incomingByTarget.get(e.target) ?? new Set<string>()
-    deps.add(e.source)
-    incomingByTarget.set(e.target, deps)
+    const { edge: visualEdge, kind } = toVisualEdge(nodes, e)
+    if (!nodeById.has(visualEdge.source) || !nodeById.has(visualEdge.target)) continue
+    if (primaryKinds.has(kind)) {
+      const targets = outgoingBySource.get(visualEdge.source) ?? new Set<string>()
+      targets.add(visualEdge.target)
+      outgoingBySource.set(visualEdge.source, targets)
+      continue
+    }
+    if (dependencyKinds.has(kind)) {
+      const targets = dependencyBySource.get(visualEdge.source) ?? new Set<string>()
+      targets.add(visualEdge.target)
+      dependencyBySource.set(visualEdge.source, targets)
+    }
   }
 
   const levelByNode = new Map<string, number>([[entryNodeId, 0]])
@@ -259,20 +298,20 @@ export function layoutFromEntry(
   while (frontier.length > 0) {
     const next: string[] = []
     const orderedFrontier = [...frontier].sort(compareNodeIds)
-    for (const targetId of orderedFrontier) {
-      const deps = [...(incomingByTarget.get(targetId) ?? new Set<string>())].sort(compareNodeIds)
-      for (const sourceId of deps) {
+    for (const sourceId of orderedFrontier) {
+      const targets = [...(outgoingBySource.get(sourceId) ?? new Set<string>())].sort(compareNodeIds)
+      for (const targetId of targets) {
         const nextLevel = level + 1
-        const previousLevel = levelByNode.get(sourceId)
+        const previousLevel = levelByNode.get(targetId)
         if (previousLevel == null || nextLevel < previousLevel) {
-          levelByNode.set(sourceId, nextLevel)
+          levelByNode.set(targetId, nextLevel)
         }
-        if (!primaryParent.has(sourceId)) {
-          primaryParent.set(sourceId, targetId)
+        if (!primaryParent.has(targetId)) {
+          primaryParent.set(targetId, sourceId)
         }
-        if (!connected.has(sourceId)) {
-          connected.add(sourceId)
-          next.push(sourceId)
+        if (!connected.has(targetId)) {
+          connected.add(targetId)
+          next.push(targetId)
         }
       }
     }
@@ -324,21 +363,57 @@ export function layoutFromEntry(
       if (index < children.length - 1) cursor += branchGapUnits
     })
   }
-  placeSubtree(entryNodeId, 0)
+  if (nodeById.has(entryNodeId)) {
+    placeSubtree(entryNodeId, 0)
+  }
 
   const maxConnectedLevel = Math.max(0, ...levelByNode.values())
   const maxConnectedY = Math.max(0, ...[...positioned.values()].map((p) => p.y))
-  const disconnected = nodes
-    .filter((n) => !connected.has(n.id))
+  const placeDependencies = (ownerId: string) => {
+    const ownerPos = positioned.get(ownerId)
+    if (!ownerPos) return
+    const deps = [...(dependencyBySource.get(ownerId) ?? new Set<string>())]
+      .filter((id) => nodeById.has(id) && !positioned.has(id))
+      .sort(compareNodeIds)
+    deps.forEach((depId, index) => {
+      const row = Math.floor(index / dependencyPerRow)
+      const col = index % dependencyPerRow
+      const rowCount = Math.min(dependencyPerRow, deps.length - row * dependencyPerRow)
+      const startX = ownerPos.x - ((rowCount - 1) * dependencyXGap) / 2
+      positioned.set(depId, {
+        x: startX + col * dependencyXGap,
+        y: ownerPos.y + dependencyYGap + row * dependencyYGap,
+      })
+    })
+  }
+
+  const positionedPrimary = [...positioned.keys()]
+  for (const ownerId of positionedPrimary) {
+    placeDependencies(ownerId)
+  }
+
+  const disconnectedPrimary = nodes
+    .filter((n) => !connected.has(n.id) && !positioned.has(n.id))
     .map((n) => n.id)
     .sort(compareNodeIds)
-  let disconnectedY = maxConnectedY + rowHeight * 1.6
-  for (const nodeId of disconnected) {
+  let disconnectedY = maxConnectedY + rowHeight * 1.45
+  for (const nodeId of disconnectedPrimary) {
     positioned.set(nodeId, {
       x: (maxConnectedLevel + 1) * columnWidth,
       y: disconnectedY,
     })
+    placeDependencies(nodeId)
     disconnectedY += rowHeight
+  }
+
+  let detachedY = disconnectedY + rowHeight * 0.8
+  const detached = nodes
+    .filter((n) => !positioned.has(n.id))
+    .map((n) => n.id)
+    .sort(compareNodeIds)
+  for (const nodeId of detached) {
+    positioned.set(nodeId, { x: (maxConnectedLevel + 1.6) * columnWidth, y: detachedY })
+    detachedY += rowHeight
   }
 
   return nodes.map((n) => ({

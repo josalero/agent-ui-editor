@@ -5,18 +5,27 @@ export interface ConditionalBranchDto {
   agentId: string
 }
 
+/** Tool reference on a node (id + optional description for layout/UI). */
+export interface NodeToolDto {
+  id: string
+  description?: string
+}
+
 /** One node in a workflow graph. */
 export interface WorkflowNodeDto {
   id: string
   type: string
   baseUrl?: string | null
   modelName?: string | null
+  temperature?: number | null
+  maxTokens?: number | null
   llmId?: string | null
   name?: string | null
   role?: string | null
   systemMessage?: string | null
   promptTemplate?: string | null
   outputKey?: string | null
+  tools?: NodeToolDto[] | null
   toolIds?: string[] | null
   subAgentIds?: string[] | null
   responseStrategy?: string | null

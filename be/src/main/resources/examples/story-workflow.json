@@ -2,27 +2,49 @@
   "name": "Story workflow",
   "entryNodeId": "seq-story",
   "nodes": [
-    { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
+    {
+      "id": "llm-writer",
+      "type": "llm",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "modelName": "openai/gpt-4o-mini",
+      "temperature": 0.9,
+      "maxTokens": 900
+    },
+    {
+      "id": "llm-editor",
+      "type": "llm",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "modelName": "openai/gpt-4o-mini",
+      "temperature": 0.2,
+      "maxTokens": 700
+    },
     {
       "id": "writer",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-writer",
       "name": "CreativeWriter",
       "role": "Story writer",
       "systemMessage": "You write concise, vivid first drafts.",
       "promptTemplate": "Write a short story (2-3 paragraphs) about {{metadata.topic}} in {{metadata.style}} style.",
-      "outputKey": "story"
+      "outputKey": "story",
+      "tools": [{"id": "calculator", "description": "Evaluate arithmetic expressions (e.g. 2 + 3 * 4)"}]
     },
     {
       "id": "editor",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-editor",
       "name": "StyleEditor",
       "role": "Story editor",
       "systemMessage": "You edit for clarity, rhythm, and tone while preserving intent.",
-      "promptTemplate": "Refine the draft with a stronger {{metadata.style}} tone. Keep it tight and polished.",
-      "outputKey": "story"
+      "promptTemplate": "Refine this draft with a stronger {{metadata.style}} tone while preserving meaning:\n\n{{story}}",
+      "outputKey": "story",
+      "tools": [{"id": "time", "description": "Current date and time in UTC (ISO-8601)"}]
     },
-    { "id": "seq-story", "type": "sequence", "subAgentIds": ["writer", "editor"], "outputKey": "story" }
+    {
+      "id": "seq-story",
+      "type": "sequence",
+      "subAgentIds": ["writer", "editor"],
+      "outputKey": "story"
+    }
   ]
 }

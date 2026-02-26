@@ -9,6 +9,10 @@ import java.util.Objects;
 /**
  * One node in a workflow graph. Type-specific fields are optional;
  * validator enforces required fields per node type.
+ * <p>
+ * Agent/supervisor nodes may have {@code tools} (full definitions with id and description)
+ * for layout and UI; legacy {@code toolIds} is still supported for backward compatibility.
+ * </p>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record WorkflowNodeDto(
@@ -16,12 +20,15 @@ public record WorkflowNodeDto(
         @NotNull String type,
         String baseUrl,
         String modelName,
+        Double temperature,
+        Integer maxTokens,
         String llmId,
         String name,
         String role,
         String systemMessage,
         String promptTemplate,
         String outputKey,
+        List<ToolInfoDto> tools,
         List<String> toolIds,
         List<String> subAgentIds,
         String responseStrategy,

@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Typography } from 'antd'
 import type { NodeKind } from '../nodes'
 import { getAvailableTools } from '../api/client'
 import type { AvailableTool } from '../api/types'
+import {
+  ApartmentOutlined,
+  BranchesOutlined,
+  ClusterOutlined,
+  OrderedListOutlined,
+  RobotOutlined,
+  TeamOutlined,
+} from '@ant-design/icons'
 
 const LABELS: Record<NodeKind, string> = {
   llm: 'LLM',
@@ -11,6 +20,15 @@ const LABELS: Record<NodeKind, string> = {
   sequence: 'Sequence',
   parallel: 'Parallel',
   conditional: 'Conditional',
+}
+
+const ICONS: Record<NodeKind, ReactNode> = {
+  llm: <RobotOutlined />,
+  agent: <TeamOutlined />,
+  supervisor: <ClusterOutlined />,
+  sequence: <OrderedListOutlined />,
+  parallel: <ApartmentOutlined />,
+  conditional: <BranchesOutlined />,
 }
 
 const KINDS: NodeKind[] = ['llm', 'agent', 'supervisor', 'sequence', 'parallel', 'conditional']
@@ -48,7 +66,10 @@ export default function NodePalette({
               onClick={() => onAddNode(kind)}
               className="w-full text-left px-3 py-2 rounded-md text-sm border border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
             >
-              {LABELS[kind]}
+              <span className="inline-flex items-center gap-2">
+                <span className="text-slate-500">{ICONS[kind]}</span>
+                <span>{LABELS[kind]}</span>
+              </span>
             </button>
           </li>
         ))}
@@ -76,7 +97,10 @@ export default function NodePalette({
                         : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'
                     }`}
                   >
-                    <span className="font-medium">{a.name}</span>
+                    <span className="font-medium inline-flex items-center gap-1.5">
+                      <span className="text-slate-500">{a.type === 'supervisor' ? <ClusterOutlined /> : <TeamOutlined />}</span>
+                      <span>{a.name}</span>
+                    </span>
                     <span className="block text-[11px] text-slate-500">{a.type}</span>
                   </button>
                 </li>

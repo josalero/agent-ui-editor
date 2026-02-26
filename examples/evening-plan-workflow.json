@@ -2,11 +2,13 @@
   "name": "Evening plan workflow",
   "entryNodeId": "seq-evening",
   "nodes": [
-    { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
+    { "id": "llm-movies", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.6, "maxTokens": 500 },
+    { "id": "llm-meals", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.7, "maxTokens": 500 },
+    { "id": "llm-composer", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.35, "maxTokens": 700 },
     {
       "id": "movies",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-movies",
       "name": "MovieExpert",
       "role": "Movie recommender",
       "systemMessage": "Recommend only practical options with one-line rationale.",
@@ -16,7 +18,7 @@
     {
       "id": "meals",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-meals",
       "name": "MealExpert",
       "role": "Meal planner",
       "systemMessage": "Recommend one dinner idea with simple ingredients.",
@@ -33,7 +35,7 @@
     {
       "id": "composer",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-composer",
       "name": "PlanComposer",
       "role": "Plan composer",
       "systemMessage": "Merge options into one concise, actionable evening plan.",

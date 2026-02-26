@@ -152,7 +152,7 @@ public class WorkflowDefinitionService {
 
     private List<WorkflowNodeDto> readNodesFromJson(String graphJson) {
         try {
-            return jsonMapper.readValue(graphJson, new TypeReference<>() {});
+            return jsonMapper.readValue(graphJson, new TypeReference<List<WorkflowNodeDto>>() { });
         } catch (JacksonException e) {
             throw new IllegalStateException("Failed to deserialize workflow nodes", e);
         }

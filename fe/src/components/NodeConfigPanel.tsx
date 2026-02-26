@@ -46,6 +46,37 @@ export default function NodeConfigPanel({ node, allNodes, allEdges, onUpdate, on
   }
 
   const type = data.type ?? 'agent'
+  const canBeEntry = type === 'sequence' || type === 'parallel' || type === 'supervisor'
+
+  if (type === 'tool') {
+    const description = (data.description as string | undefined) ?? ''
+    return (
+      <div className="p-4 text-sm">
+        <Typography.Text strong className="text-slate-600 text-xs uppercase tracking-wide block mb-3">
+          Tool node
+        </Typography.Text>
+        <Space direction="vertical" className="w-full" size="small">
+          <div>
+            <label className="block text-slate-600 text-xs mb-1">Tool</label>
+            <Input value={(data.toolId as string | undefined) ?? data.label ?? data.id} size="small" readOnly />
+          </div>
+          {description && (
+            <div>
+              <label className="block text-slate-600 text-xs mb-1">Description</label>
+              <Input value={description} size="small" readOnly />
+            </div>
+          )}
+          <div>
+            <label className="block text-slate-600 text-xs mb-1">Assigned to</label>
+            <Input value={(data.parentAgentId as string | undefined) ?? 'Unknown'} size="small" readOnly />
+          </div>
+          <Typography.Text type="secondary" className="text-xs">
+            Visual dependency node derived from agent tools (id + description).
+          </Typography.Text>
+        </Space>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 text-sm">
@@ -80,6 +111,29 @@ export default function NodeConfigPanel({ node, allNodes, allEdges, onUpdate, on
               <Input
                 value={data.modelName ?? ''}
                 onChange={(e) => update('modelName', e.target.value)}
+                size="small"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-600 text-xs mb-1">Temperature</label>
+              <Input
+                type="number"
+                step="0.1"
+                value={data.temperature ?? ''}
+                onChange={(e) =>
+                  update('temperature', e.target.value === '' ? undefined : Number(e.target.value))
+                }
+                size="small"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-600 text-xs mb-1">Max tokens</label>
+              <Input
+                type="number"
+                value={data.maxTokens ?? ''}
+                onChange={(e) =>
+                  update('maxTokens', e.target.value === '' ? undefined : parseInt(e.target.value, 10))
+                }
                 size="small"
               />
             </div>
@@ -160,11 +214,11 @@ export default function NodeConfigPanel({ node, allNodes, allEdges, onUpdate, on
             </div>
             {availableTools.length > 0 && (
               <div>
-                <label className="block text-slate-600 text-xs mb-1">Available tools</label>
+                <label className="block text-slate-600 text-xs mb-1">Tools (id + description for layout)</label>
                 <div className="flex flex-wrap gap-1 mb-1">
                   {availableTools.map((t) => {
-                    const current = Array.isArray(data.toolIds) ? data.toolIds : []
-                    const added = current.includes(t.id)
+                    const current = Array.isArray(data.tools) ? data.tools : []
+                    const added = current.some((x) => x.id === t.id)
                     return (
                       <Tooltip key={t.id} title={t.description || undefined}>
                         <Tag
@@ -172,9 +226,9 @@ export default function NodeConfigPanel({ node, allNodes, allEdges, onUpdate, on
                           className="cursor-pointer"
                           onClick={() => {
                             if (added) {
-                              update('toolIds', current.filter((id) => id !== t.id))
+                              update('tools', current.filter((x) => x.id !== t.id))
                             } else {
-                              update('toolIds', [...current, t.id].sort())
+                              update('tools', [...current, { id: t.id, description: t.description }].sort((a, b) => a.id.localeCompare(b.id)))
                             }
                           }}
                         >
@@ -186,22 +240,6 @@ export default function NodeConfigPanel({ node, allNodes, allEdges, onUpdate, on
                 </div>
               </div>
             )}
-            <div>
-              <label className="block text-slate-600 text-xs mb-1">Tool IDs (comma)</label>
-              <Input
-                value={Array.isArray(data.toolIds) ? data.toolIds.join(', ') : ''}
-                onChange={(e) =>
-                  update(
-                    'toolIds',
-                    e.target.value
-                      .split(',')
-                      .map((s) => s.trim())
-                      .filter(Boolean)
-                  )
-                }
-                size="small"
-              />
-            </div>
           </>
         )}
 
@@ -281,9 +319,10 @@ export default function NodeConfigPanel({ node, allNodes, allEdges, onUpdate, on
             icon={<FlagOutlined />}
             size="small"
             block
+            disabled={!canBeEntry}
             onClick={() => onSetEntry(node.id)}
           >
-            {data.isEntry ? 'Entry node' : 'Set as entry'}
+            {data.isEntry ? 'Entry node' : canBeEntry ? 'Set as entry' : 'Entry not allowed for this type'}
           </Button>
           {onDeleteNode && (
             <Button

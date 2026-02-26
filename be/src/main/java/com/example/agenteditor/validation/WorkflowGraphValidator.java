@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 public final class WorkflowGraphValidator {
 
     private static final Set<String> VALID_TYPES = Set.of("llm", "agent", "supervisor", "sequence", "parallel", "conditional");
+    private static final Set<String> VALID_ENTRY_TYPES = Set.of("sequence", "parallel", "supervisor");
 
     private WorkflowGraphValidator() {
     }
@@ -38,6 +39,15 @@ public final class WorkflowGraphValidator {
 
         if (entryNodeId != null && !entryNodeId.isBlank() && !nodeIds.contains(entryNodeId)) {
             errors.add(new ValidationError("entryNodeId", "entryNodeId must reference an existing node id: " + entryNodeId));
+        }
+        if (entryNodeId != null && !entryNodeId.isBlank()) {
+            WorkflowNodeDto entryNode = nodes.stream()
+                    .filter(n -> entryNodeId.equals(n.id()))
+                    .findFirst()
+                    .orElse(null);
+            if (entryNode != null && VALID_TYPES.contains(entryNode.type()) && !VALID_ENTRY_TYPES.contains(entryNode.type())) {
+                errors.add(new ValidationError("entryNodeId", "entryNodeId must reference a node of type sequence, parallel, or supervisor"));
+            }
         }
 
         for (WorkflowNodeDto node : nodes) {

@@ -1,6 +1,7 @@
 package com.example.agenteditor.interpreter;
 
 import com.example.agenteditor.api.v1.dto.ConditionalBranchDto;
+import com.example.agenteditor.api.v1.dto.ToolInfoDto;
 import com.example.agenteditor.api.v1.dto.WorkflowNodeDto;
 import com.example.agenteditor.llm.OpenRouterChatModelFactory;
 import com.example.agenteditor.tools.ToolRegistry;
@@ -28,7 +29,7 @@ import java.util.regex.Pattern;
 public class WorkflowGraphInterpreter {
 
     private static final Logger log = LoggerFactory.getLogger(WorkflowGraphInterpreter.class);
-    private static final List<String> VALID_ENTRY_TYPES = List.of("agent", "sequence", "parallel", "conditional", "supervisor");
+    private static final List<String> VALID_ENTRY_TYPES = List.of("sequence", "parallel", "supervisor");
     private static final Pattern TEMPLATE_VAR_PATTERN = Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_.-]+)\\s*}}");
 
     private final OpenRouterChatModelFactory chatModelFactory;
@@ -40,7 +41,7 @@ public class WorkflowGraphInterpreter {
     }
 
     /**
-     * Builds the runnable for the given graph. Entry node must be agent, sequence, parallel, conditional, or supervisor.
+     * Builds the runnable for the given graph. Entry node must be sequence, parallel, or supervisor.
      */
     public WorkflowRunnable buildEntryRunnable(String entryNodeId, List<WorkflowNodeDto> nodes) {
         Objects.requireNonNull(entryNodeId, "entryNodeId");
@@ -63,7 +64,12 @@ public class WorkflowGraphInterpreter {
 
         for (WorkflowNodeDto node : nodes) {
             if ("llm".equals(node.type())) {
-                ChatModel model = chatModelFactory.build(node.baseUrl(), node.modelName());
+                ChatModel model = chatModelFactory.build(
+                        node.baseUrl(),
+                        node.modelName(),
+                        node.temperature(),
+                        node.maxTokens()
+                );
                 chatModels.put(node.id(), model);
                 log.debug("Built LLM node id={}", node.id());
             }
@@ -190,7 +196,10 @@ public class WorkflowGraphInterpreter {
             throw new IllegalArgumentException("LLM node not found for agent " + node.id() + ": " + llmId);
         }
 
-        Object[] tools = toolRegistry.getTools(node.toolIds() != null ? node.toolIds() : List.of());
+        List<String> toolIdsToUse = (node.tools() != null && !node.tools().isEmpty())
+                ? node.tools().stream().map(ToolInfoDto::id).toList()
+                : (node.toolIds() != null ? node.toolIds() : List.of());
+        Object[] tools = toolRegistry.getTools(toolIdsToUse);
         var builder = AgenticServices.agentBuilder()
                 .chatModel(chatModel)
                 .name(node.name() != null ? node.name() : node.id())

@@ -22,4 +22,9 @@ public class StubOpenRouterChatModelFactory extends OpenRouterChatModelFactory {
     public ChatModel build(String baseUrl, String modelName) {
         return stub;
     }
+
+    @Override
+    public ChatModel build(String baseUrl, String modelName, Double temperature, Integer maxTokens) {
+        return stub;
+    }
 }

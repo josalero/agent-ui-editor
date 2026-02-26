@@ -21,10 +21,16 @@ Default port is `8085` (see `be/src/main/resources/application.yml`).
 ## Key Features
 
 - n8n-style workflow editor with node palette and graph canvas.
-- Auto layout with orchestrator-style flow (entry on left, dependencies fan to the right).
-- Visual connection semantics for orchestration edges (`sub-agent`, `uses LLM`, `router`, `branch`).
+- Auto layout with an orchestrator spine (entry on left, primary flow to the right) and attached dependency rows under each node (for LLM/router links).
+- Tool assignments on agents are visualized as tool nodes connected to the owning sub-agent/supervisor.
+- Visual connection semantics for orchestration edges (`delegates`, `model`, `router`, `tool`, `branch`).
+- Node cards and palette now use dedicated icons/labels per type (`LLM`, `Agent`, `Supervisor`, `Sequence`, `Parallel`, `Conditional`).
 - Left panel includes an `Agents` list for quick selection/focus on the canvas.
+- UI rule: adding a new `Agent` or `Supervisor` auto-creates a paired dedicated `LLM` node and links it.
+- Entry node is restricted to: `sequence`, `parallel`, or `supervisor`.
+- LLM node setup supports `baseUrl`, `modelName`, `temperature`, and `maxTokens`.
 - Workflow CRUD + run API.
+- Example workflows are refreshed at backend startup (same sample names are updated in place).
 
 ## Run Payload Format
 

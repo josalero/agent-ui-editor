@@ -2,11 +2,14 @@
   "name": "Expert router workflow",
   "entryNodeId": "seq-route",
   "nodes": [
-    { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
+    { "id": "llm-router", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.1, "maxTokens": 120 },
+    { "id": "llm-general", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.35, "maxTokens": 500 },
+    { "id": "llm-creative", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.95, "maxTokens": 700 },
+    { "id": "llm-planning", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini", "temperature": 0.25, "maxTokens": 650 },
     {
       "id": "router",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-router",
       "name": "CategoryRouter",
       "role": "Intent router",
       "systemMessage": "Output only one category token: GENERAL, CREATIVE, or PLANNING.",
@@ -16,7 +19,7 @@
     {
       "id": "general",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-general",
       "name": "GeneralExpert",
       "role": "General assistant",
       "promptTemplate": "Answer clearly: {{metadata.prompt}}",
@@ -26,7 +29,7 @@
     {
       "id": "creative",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-creative",
       "name": "CreativeExpert",
       "role": "Creative specialist",
       "promptTemplate": "Respond creatively to: {{metadata.prompt}}",
@@ -35,7 +38,7 @@
     {
       "id": "planning",
       "type": "agent",
-      "llmId": "llm-1",
+      "llmId": "llm-planning",
       "name": "PlanningExpert",
       "role": "Planning specialist",
       "promptTemplate": "Create a practical plan for: {{metadata.prompt}}",

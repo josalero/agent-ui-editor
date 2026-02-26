@@ -29,11 +29,13 @@ function applyLayout(
   entryNodeId: string
 ): Node<NodeData>[] {
   if (entryNodeId && nodes.some((n) => n.id === entryNodeId)) {
-    return layoutFromEntry(entryNodeId, nodes, edges, { columnWidth: 340, rowHeight: 160 })
+    return layoutFromEntry(entryNodeId, nodes, edges, { columnWidth: 360, rowHeight: 170 })
   }
   return layoutByDependency(nodes, edges, { columnWidth: 300, rowHeight: 130 })
 }
 import type { NodeData } from '../editor/nodeData'
+
+const ENTRY_NODE_TYPES = new Set(['sequence', 'parallel', 'supervisor'])
 
 let nodeIdCounter = 0
 function nextId(prefix: string): string {
@@ -41,11 +43,55 @@ function nextId(prefix: string): string {
   return `${prefix}-${nodeIdCounter}`
 }
 
+function toolNodeId(parentAgentId: string, toolId: string): string {
+  const normalized = toolId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  return `tool-${parentAgentId}-${normalized}`
+}
+
+/** One tool ref for layout (id + optional description). */
+interface ToolRef {
+  id: string
+  description?: string
+}
+
+function getToolsList(data: NodeData | undefined): ToolRef[] {
+  if (!data) return []
+  // Prefer full tools array (id + description); support any shape from API
+  const rawTools = (data as Record<string, unknown>).tools ?? data.tools
+  if (rawTools != null && Array.isArray(rawTools) && rawTools.length > 0) {
+    const list: ToolRef[] = []
+    for (const t of rawTools) {
+      if (t == null || typeof t !== 'object') continue
+      const o = t as Record<string, unknown>
+      const id = o.id != null ? String(o.id).trim() : ''
+      if (id.length > 0) list.push({ id, description: o.description != null ? String(o.description) : undefined })
+    }
+    if (list.length > 0) return list
+  }
+  const raw = data.toolIds as string[] | string | undefined
+  const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : typeof raw === 'string' && raw.length > 0 ? [raw] : []
+  return ids.map((id) => ({ id }))
+}
+
+function toolLabel(tool: ToolRef): string {
+  return tool.id
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
 function createNodeData(kind: NodeKind): NodeData {
   const id = nextId(kind)
   const base: NodeData = { id, type: kind, label: id }
   if (kind === 'llm') {
-    return { ...base, baseUrl: 'https://openrouter.ai/api/v1', modelName: 'openai/gpt-4o-mini' }
+    return {
+      ...base,
+      baseUrl: 'https://openrouter.ai/api/v1',
+      modelName: 'openai/gpt-4o-mini',
+      temperature: 0.7,
+      maxTokens: 800,
+    }
   }
   if (kind === 'agent' || kind === 'supervisor') return { ...base, name: id }
   if (kind === 'sequence' || kind === 'parallel') return { ...base, outputKey: 'output' }
@@ -99,11 +145,35 @@ export default function WorkflowEditor() {
 
   const onAddNode = useCallback(
     (kind: NodeKind) => {
+      const baseX = 250 + (nodes.length % 4) * 220
+      const baseY = 100 + Math.floor(nodes.length / 4) * 140
+
+      // Market-style default: every new agent/supervisor comes with its own dedicated model.
+      if (kind === 'agent' || kind === 'supervisor') {
+        const llmData = createNodeData('llm')
+        const workerData = createNodeData(kind)
+        workerData.llmId = llmData.id
+        const llmNode: Node<NodeData> = {
+          id: llmData.id,
+          type: 'llm',
+          position: { x: baseX, y: baseY + 170 },
+          data: llmData,
+        }
+        const workerNode: Node<NodeData> = {
+          id: workerData.id,
+          type: kind,
+          position: { x: baseX, y: baseY },
+          data: workerData,
+        }
+        setNodes((prev) => [...prev, llmNode, workerNode])
+        return
+      }
+
       const data = createNodeData(kind)
       const newNode: Node<NodeData> = {
         id: data.id,
         type: kind,
-        position: { x: 250 + (nodes.length % 4) * 180, y: 100 + Math.floor(nodes.length / 4) * 100 },
+        position: { x: baseX, y: baseY },
         data,
       }
       setNodes((prev) => [...prev, newNode])
@@ -122,12 +192,17 @@ export default function WorkflowEditor() {
 
   const onSetEntry = useCallback(
     (nodeId: string) => {
+      const node = nodes.find((n) => n.id === nodeId)
+      if (!node || !ENTRY_NODE_TYPES.has(node.data?.type ?? '')) {
+        setError('Entry node must be sequence, parallel, or supervisor.')
+        return
+      }
       setEntryNodeId(nodeId)
       setNodes((prev) =>
         prev.map((n) => ({ ...n, data: { ...n.data, isEntry: n.id === nodeId } }))
       )
     },
-    [setNodes]
+    [nodes, setNodes]
   )
 
   const onSelectionChange = useCallback(
@@ -167,36 +242,102 @@ export default function WorkflowEditor() {
     [flow, nodes, setNodes]
   )
 
-  const displayEdges = useMemo(() => {
+  const persistEdges = useMemo(() => {
     const derived = deriveEdgesFromNodes(nodes)
     const derivedKey = new Set(derived.map((e) => `${e.source}-${e.target}`))
     const extra = edges.filter((e) => !derivedKey.has(`${e.source}-${e.target}`))
     return [...derived, ...extra]
   }, [nodes, edges])
 
+  const toolNodes = useMemo<Node<NodeData>[]>(() => {
+    const created: Node<NodeData>[] = []
+    const xs = nodes.map((n) => n.position.x)
+    const minX = xs.length > 0 ? Math.min(...xs) : 0
+    const maxX = xs.length > 0 ? Math.max(...xs) : 0
+    for (const owner of nodes) {
+      const ownerType = (owner.data?.type as string | undefined)?.toLowerCase()
+      if (ownerType !== 'agent' && ownerType !== 'supervisor') continue
+      const toolsList = getToolsList(owner.data)
+      const roomLeft = owner.position.x - minX
+      const roomRight = maxX - owner.position.x
+      const placeRight = roomRight >= roomLeft
+      const dependencyBaseX = placeRight ? owner.position.x + 220 : owner.position.x - 220
+      const dependencyBaseY = owner.position.y + 4
+      toolsList.forEach((tool, index) => {
+        const row = index
+        created.push({
+          id: toolNodeId(owner.id, tool.id),
+          type: 'tool',
+          draggable: false,
+          selectable: true,
+          connectable: false,
+          zIndex: 10,
+          position: {
+            x: dependencyBaseX,
+            y: dependencyBaseY + row * 96,
+          },
+          data: {
+            id: toolNodeId(owner.id, tool.id),
+            type: 'tool',
+            label: toolLabel(tool),
+            toolId: tool.id,
+            description: tool.description,
+            parentAgentId: (owner.data?.name ?? owner.id) as string,
+            isVisualOnly: true,
+          },
+        })
+      })
+    }
+    return created
+  }, [nodes])
+
+  const displayNodes = useMemo(() => [...nodes, ...toolNodes], [nodes, toolNodes])
+
+  const toolEdges = useMemo<Edge[]>(
+    () =>
+      nodes.flatMap((owner) => {
+        const ownerType = (owner.data?.type as string | undefined)?.toLowerCase()
+        if (ownerType !== 'agent' && ownerType !== 'supervisor') return []
+        const toolsList = getToolsList(owner.data)
+        return toolsList.map((tool) => ({
+          id: `e-tool-${owner.id}-${tool.id}`,
+          source: owner.id,
+          target: toolNodeId(owner.id, tool.id),
+        }))
+      }),
+    [nodes]
+  )
+
+  const displayEdges = useMemo(() => [...persistEdges, ...toolEdges], [persistEdges, toolEdges])
+
   const edgesWithLabels = useMemo<Edge[]>(
     () =>
       displayEdges.map((e) => {
-        const { edge: visualEdge, kind } = toVisualEdge(nodes, e)
+        const { edge: visualEdge, kind } = toVisualEdge(displayNodes, e)
         const labelByKind: Record<string, string> = {
-          'sub-agent': 'sub-agent',
-          llm: 'uses LLM',
+          'sub-agent': 'delegates',
+          llm: 'model',
           router: 'router',
           branch: 'branch',
+          tool: 'tool',
         }
-        const label = labelByKind[kind] ?? getEdgeLabel(nodes, visualEdge)
+        const label = labelByKind[kind] ?? getEdgeLabel(displayNodes, visualEdge)
         const styleByKind: Record<string, { stroke: string; strokeWidth: number; strokeDasharray?: string }> = {
-          'sub-agent': { stroke: '#0e7490', strokeWidth: 2.8 },
-          llm: { stroke: '#2563eb', strokeWidth: 2.2, strokeDasharray: '7 4' },
-          router: { stroke: '#7c3aed', strokeWidth: 2.2, strokeDasharray: '4 4' },
-          branch: { stroke: '#0891b2', strokeWidth: 2.4 },
-          custom: { stroke: '#1890ff', strokeWidth: 2 },
+          'sub-agent': { stroke: '#0f766e', strokeWidth: 2.6 },
+          llm: { stroke: '#2563eb', strokeWidth: 2.2, strokeDasharray: '7 5' },
+          router: { stroke: '#7c3aed', strokeWidth: 2.2, strokeDasharray: '5 5' },
+          branch: { stroke: '#0284c7', strokeWidth: 2.4 },
+          tool: { stroke: '#c2410c', strokeWidth: 2.1, strokeDasharray: '4 4' },
+          custom: { stroke: '#475569', strokeWidth: 2.1 },
         }
         const edgeStyle = styleByKind[kind] ?? styleByKind.custom
+        const isDependencyEdge = kind === 'llm' || kind === 'router' || kind === 'tool'
         return {
           ...visualEdge,
-          type: 'smoothstep',
-          animated: kind === 'sub-agent' || kind === 'branch',
+          type: isDependencyEdge ? 'smoothstep' : 'bezier',
+          animated: kind === 'sub-agent' || kind === 'branch' || kind === 'tool',
+          sourceHandle: isDependencyEdge ? 'dep-out' : 'main-out',
+          targetHandle: isDependencyEdge ? 'dep-in' : 'main-in',
           ...(label ? { label } : {}),
           style: edgeStyle,
           labelStyle: {
@@ -213,16 +354,21 @@ export default function WorkflowEditor() {
           markerEnd: { type: MarkerType.ArrowClosed, color: edgeStyle.stroke },
         }
       }),
-    [nodes, displayEdges]
+    [displayNodes, displayEdges]
   )
 
   const handleSave = useCallback(async () => {
-    const entry = entryNodeId || nodes[0]?.id
+    const entry = entryNodeId
     if (!entry || nodes.length === 0) {
       setError('Add at least one node and set an entry node.')
       return
     }
-    const payload = reactFlowToGraph(workflowName, nodes, displayEdges, entry)
+    const entryNode = nodes.find((n) => n.id === entry)
+    if (!entryNode || !ENTRY_NODE_TYPES.has(entryNode.data?.type ?? '')) {
+      setError('Entry node must be sequence, parallel, or supervisor.')
+      return
+    }
+    const payload = reactFlowToGraph(workflowName, nodes, persistEdges, entry)
     setSaving(true)
     setError(null)
     try {
@@ -237,7 +383,7 @@ export default function WorkflowEditor() {
     } finally {
       setSaving(false)
     }
-  }, [workflowName, entryNodeId, nodes, displayEdges, id, navigate])
+  }, [workflowName, entryNodeId, nodes, persistEdges, id, navigate])
 
   const handleDeleteWorkflow = useCallback(async () => {
     if (!id) return
@@ -265,8 +411,11 @@ export default function WorkflowEditor() {
   )
 
   const handleLayout = useCallback(() => {
-    setNodes((prev) => applyLayout(prev, displayEdges, entryNodeId))
-  }, [entryNodeId, displayEdges, setNodes])
+    setNodes((prev) => applyLayout(prev, persistEdges, entryNodeId))
+    requestAnimationFrame(() => {
+      flow?.fitView({ duration: 320, padding: 0.22 })
+    })
+  }, [entryNodeId, persistEdges, setNodes, flow])
 
   if (loading) {
     return (
@@ -355,7 +504,7 @@ export default function WorkflowEditor() {
         {/* Center: Canvas */}
         <main className="flex-1 min-w-0 bg-slate-100/80">
           <ReactFlow
-            nodes={nodes}
+            nodes={displayNodes}
             edges={edgesWithLabels}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -388,7 +537,7 @@ export default function WorkflowEditor() {
           <div className="flex-1 overflow-auto">
             <NodeConfigPanel
               node={selectedNode}
-              allNodes={nodes}
+              allNodes={displayNodes}
               allEdges={displayEdges}
               onUpdate={onUpdateNodeData}
               onSetEntry={onSetEntry}

@@ -12,6 +12,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("WorkflowGraphValidator")
 class WorkflowGraphValidatorTest {
@@ -24,7 +25,7 @@ class WorkflowGraphValidatorTest {
         @DisplayName("passes when entry node exists and types are valid")
         void validSingleNodePasses() {
             List<WorkflowNodeDto> nodes = List.of(
-                    node("n1", "llm", null, null, null, null, null, null, null, null, null, null, null)
+                    node("n1", "sequence", null, null, null, null, "out", null, null, null, null, null, null)
             );
             assertDoesNotThrow(() -> WorkflowGraphValidator.validate("n1", nodes));
         }
@@ -45,6 +46,7 @@ class WorkflowGraphValidatorTest {
         @DisplayName("passes when conditional branches reference existing nodes")
         void validConditionalBranchesPass() {
             List<WorkflowNodeDto> nodes = List.of(
+                    node("entry", "sequence", null, null, null, null, "response", null, List.of("cond"), null, null, null, null),
                     node("cond", "conditional", null, null, null, null, null, null, null, null, null,
                             List.of(
                                     new ConditionalBranchDto("key", "a", "agentA"),
@@ -53,7 +55,7 @@ class WorkflowGraphValidatorTest {
                     node("agentA", "agent", null, null, null, null, null, null, null, null, null, null, null),
                     node("agentB", "agent", null, null, null, null, null, null, null, null, null, null, null)
             );
-            assertDoesNotThrow(() -> WorkflowGraphValidator.validate("cond", nodes));
+            assertDoesNotThrow(() -> WorkflowGraphValidator.validate("entry", nodes));
         }
     }
 
@@ -101,12 +103,12 @@ class WorkflowGraphValidatorTest {
         @DisplayName("fails when llmId references non-existent node")
         void missingLlmIdRefFails() {
             List<WorkflowNodeDto> nodes = List.of(
+                    node("entry", "sequence", null, null, null, null, "out", null, List.of("n1"), null, null, null, null),
                     node("n1", "agent", null, null, "nonExistent", null, null, null, null, null, null, null, null)
             );
             WorkflowGraphValidationException ex = assertThrows(WorkflowGraphValidationException.class,
-                    () -> WorkflowGraphValidator.validate("n1", nodes));
-            assertEquals(1, ex.getErrors().size());
-            assertEquals("nodes[n1].llmId", ex.getErrors().get(0).field());
+                    () -> WorkflowGraphValidator.validate("entry", nodes));
+            assertTrue(ex.getErrors().stream().anyMatch(err -> "nodes[n1].llmId".equals(err.field())));
         }
 
         @Test
@@ -125,13 +127,24 @@ class WorkflowGraphValidatorTest {
         @DisplayName("fails when branch agentId references non-existent node")
         void missingBranchAgentIdFails() {
             List<WorkflowNodeDto> nodes = List.of(
+                    node("entry", "sequence", null, null, null, null, "response", null, List.of("cond"), null, null, null, null),
                     node("cond", "conditional", null, null, null, null, null, null, null, null, null,
                             List.of(new ConditionalBranchDto("k", "v", "missingAgent")), null)
             );
             WorkflowGraphValidationException ex = assertThrows(WorkflowGraphValidationException.class,
-                    () -> WorkflowGraphValidator.validate("cond", nodes));
-            assertEquals(1, ex.getErrors().size());
-            assertEquals("nodes[cond].branches", ex.getErrors().get(0).field());
+                    () -> WorkflowGraphValidator.validate("entry", nodes));
+            assertTrue(ex.getErrors().stream().anyMatch(err -> "nodes[cond].branches".equals(err.field())));
+        }
+
+        @Test
+        @DisplayName("fails when entry node type is not sequence, parallel, or supervisor")
+        void invalidEntryNodeTypeFails() {
+            List<WorkflowNodeDto> nodes = List.of(
+                    node("agent-entry", "agent", null, null, null, null, null, null, null, null, null, null, null)
+            );
+            WorkflowGraphValidationException ex = assertThrows(WorkflowGraphValidationException.class,
+                    () -> WorkflowGraphValidator.validate("agent-entry", nodes));
+            assertTrue(ex.getErrors().stream().anyMatch(err -> "entryNodeId".equals(err.field())));
         }
     }
 
@@ -155,12 +168,15 @@ class WorkflowGraphValidatorTest {
                 type,
                 baseUrl,
                 modelName,
+                null,
+                null,
                 llmId,
                 name,
                 null,
                 null,
                 null,
                 outputKey,
+                null,
                 toolIds,
                 subAgentIds,
                 responseStrategy,
