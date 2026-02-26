@@ -13,6 +13,7 @@ export interface NodeData extends Record<string, unknown> {
   role?: string
   systemMessage?: string
   promptTemplate?: string
+  wasExecuted?: boolean
   outputKey?: string
   toolIds?: string[]
   subAgentIds?: string[]

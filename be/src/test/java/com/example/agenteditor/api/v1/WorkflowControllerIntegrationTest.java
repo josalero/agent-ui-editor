@@ -228,6 +228,8 @@ class WorkflowControllerIntegrationTest {
             assertThat(runResp.getBody()).isNotNull();
             if (runResp.getStatusCode() == HttpStatus.OK) {
                 assertThat(runResp.getBody()).containsKey("result");
+                assertThat(runResp.getBody()).containsKey("executedNodeIds");
+                assertThat(runResp.getBody()).containsKey("executedNodeNames");
             }
         }
     }

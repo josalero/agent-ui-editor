@@ -175,6 +175,7 @@ class SampleWorkflowsIntegrationTest {
             assertThat(runResp.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(runResp.getBody()).isNotNull();
             assertThat(runResp.getBody()).containsKey("result");
+            assertThat(runResp.getBody()).containsKey("executedNodeIds");
             String result = String.valueOf(runResp.getBody().get("result"));
             assertThat(result).isNotBlank();
             if ("Supervisor workflow".equals(sampleName)) {

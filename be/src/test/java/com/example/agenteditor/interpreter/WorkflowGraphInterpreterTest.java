@@ -18,7 +18,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -67,8 +66,8 @@ class WorkflowGraphInterpreterTest {
         }
 
         @Test
-        @DisplayName("parallel entry can return null even when sub-agents run")
-        void parallelEntryMayReturnNull() {
+        @DisplayName("parallel entry returns non-null output")
+        void parallelEntryReturnsNonNullOutput() {
             List<WorkflowNodeDto> nodes = List.of(
                     node("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null),
                     node("movies", "agent", null, null, "llm-1", "MovieExpert", "movies",
@@ -80,7 +79,7 @@ class WorkflowGraphInterpreterTest {
             );
             WorkflowRunnable runnable = interpreter.buildEntryRunnable("parallel-plan", nodes);
             Object result = runnable.run(Map.of("metadata", Map.of("prompt", "Suggest an evening plan", "mood", "cozy")));
-            assertNull(result);
+            assertNotNull(result);
         }
 
         @Test

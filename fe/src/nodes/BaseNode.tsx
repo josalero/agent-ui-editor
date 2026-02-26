@@ -12,6 +12,13 @@ const colors: Record<string, { bg: string; border: string }> = {
 export default function BaseNode({ data, type = 'agent', selected }: NodeProps) {
   const style = colors[type] ?? { bg: '#f5f5f5', border: '#9e9e9e' }
   const isEntry = data.isEntry === true
+  const wasExecuted = data.wasExecuted === true
+  const glow = [
+    isEntry ? '0 0 0 2px gold' : null,
+    wasExecuted ? '0 0 0 2px #22c55e, 0 0 14px rgba(34, 197, 94, 0.45)' : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
   return (
     <div
       style={{
@@ -20,7 +27,7 @@ export default function BaseNode({ data, type = 'agent', selected }: NodeProps) 
         borderRadius: 8,
         backgroundColor: style.bg,
         border: `2px solid ${selected ? '#111' : style.border}`,
-        boxShadow: isEntry ? '0 0 0 2px gold' : undefined,
+        boxShadow: glow || undefined,
       }}
     >
       <Handle
@@ -36,6 +43,7 @@ export default function BaseNode({ data, type = 'agent', selected }: NodeProps) 
       <div style={{ fontWeight: 600, textTransform: 'capitalize', marginBottom: 4 }}>{type}</div>
       <div style={{ fontSize: 12, color: '#555' }}>{data.label ?? data.name ?? data.id}</div>
       {isEntry && <div style={{ fontSize: 10, color: '#b8860b', marginTop: 4 }}>Entry</div>}
+      {wasExecuted && <div style={{ fontSize: 10, color: '#15803d', marginTop: 4 }}>Executed</div>}
     </div>
   )
 }

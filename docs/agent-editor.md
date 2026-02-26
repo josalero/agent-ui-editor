@@ -45,16 +45,19 @@ Then open **http://localhost:5173**. API calls are proxied to the backend (confi
 |--------|------|-------------|
 | `POST` | `/api/v1/workflows` | Create workflow (body: `name`, `entryNodeId`, `nodes`). Returns `{ "id": "uuid" }`. |
 | `GET` | `/api/v1/workflows` | List workflows. Returns `{ "workflows": [ { "id", "name", "updatedAt" } ] }`. |
+| `GET` | `/api/v1/workflows/samples` | List seeded sample workflows only. |
 | `GET` | `/api/v1/workflows/{id}` | Get full workflow (nodes, entryNodeId, etc.). |
 | `PUT` | `/api/v1/workflows/{id}` | Update workflow (same body as create). |
 | `DELETE` | `/api/v1/workflows/{id}` | Delete workflow. Returns 204. |
-| `POST` | `/api/v1/workflows/{id}/run` | Run workflow. Body: JSON object (e.g. `{ "metadata": { "prompt": "Hello", "topic": "test" } }`). Returns `{ "result": "..." }`. |
+| `POST` | `/api/v1/workflows/{id}/run` | Run workflow. Body: JSON object (e.g. `{ "metadata": { "prompt": "Hello", "topic": "test" } }`). Returns `{ "result": "...", "executedNodeIds": ["..."], "executedNodeNames": ["..."] }`. |
 
 ## Using the UI
 
 - **Workflows list:** Open `/` to see all workflows. Use “Create workflow” or “Run” per row.
-- **Editor:** Open a workflow or “Create workflow” to use the canvas. Add nodes from the palette (LLM, Agent, Supervisor, Sequence, Parallel, Conditional), connect them with edges, select a node to edit fields in the side panel, and use “Set as entry” to mark the entry node. Save to create or update; Run (when the workflow is saved) opens a dialog to send input JSON and view the result.
+- **Editor:** Open a workflow or “Create workflow” to use the canvas. Add nodes from the palette (LLM, Agent, Supervisor, Sequence, Parallel, Conditional), use the left `Agents` list to focus existing agents quickly, connect nodes with labeled orchestration edges (`uses LLM`, `sub-agent`, `router`, `branch`), select a node to edit fields in the side panel, and use “Set as entry” to mark the entry node. Save to create or update; Run (when the workflow is saved) opens a dialog to send input JSON and view the result.
+- **Execution trace view:** After a run, the dialog shows executed nodes and the editor highlights executed nodes on the canvas.
 - **Per-subagent prompts:** For each `agent` node, you can set `role`, `systemMessage`, and `promptTemplate` in the node panel. `promptTemplate` supports placeholders from run input (for example `{{metadata.prompt}}`, `{{metadata.topic}}`, `{{metadata.style}}`).
+- **Entry recommendation:** `parallel` can be an entry node, but usually clearer outputs come from `sequence` or `supervisor` as entry, with `parallel` used as an inner step plus a final composing agent.
 
 Errors from the API (e.g. validation) are shown in the UI; stack traces and PII are never exposed.
 

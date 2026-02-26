@@ -65,6 +65,7 @@ export default function WorkflowEditor() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [runDialogOpen, setRunDialogOpen] = useState(false)
+  const [lastRunExecutedCount, setLastRunExecutedCount] = useState(0)
   const [deleting, setDeleting] = useState(false)
   const [flow, setFlow] = useState<ReactFlowInstance<NodeData, Edge> | null>(null)
 
@@ -73,6 +74,7 @@ export default function WorkflowEditor() {
       setNodes([])
       setEdges([])
       setEntryNodeId('')
+      setLastRunExecutedCount(0)
       setLoading(false)
       return
     }
@@ -84,6 +86,7 @@ export default function WorkflowEditor() {
         const layouted = applyLayout(n, e, w.entryNodeId)
         setNodes(layouted)
         setEdges(e)
+        setLastRunExecutedCount(0)
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
@@ -293,6 +296,11 @@ export default function WorkflowEditor() {
             Entry: {entryNodeId}
           </span>
         )}
+        {lastRunExecutedCount > 0 && (
+          <span className="text-emerald-700 text-xs truncate max-w-[180px]" title={`${lastRunExecutedCount} nodes executed in last run`}>
+            Last run: {lastRunExecutedCount} nodes executed
+          </span>
+        )}
         <Space className="ml-auto">
           <Button
             icon={<ApartmentOutlined />}
@@ -396,6 +404,19 @@ export default function WorkflowEditor() {
           workflowName={workflowName}
           onClose={() => setRunDialogOpen(false)}
           onRun={async (wid, input) => runWorkflow(wid, input)}
+          onTrace={(executedNodeIds) => {
+            const executedSet = new Set(executedNodeIds)
+            setNodes((prev) =>
+              prev.map((n) => ({
+                ...n,
+                data: {
+                  ...n.data,
+                  wasExecuted: executedSet.has(n.id),
+                },
+              }))
+            )
+            setLastRunExecutedCount(executedSet.size)
+          }}
         />
       )}
     </div>

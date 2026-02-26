@@ -151,13 +151,17 @@ public class WorkflowGraphInterpreter {
 
     private WorkflowRunnable toWorkflowRunnable(Object runnable) {
         if (runnable instanceof UntypedAgent agent) {
-            return agent::invoke;
+            return agent::invokeWithAgenticScope;
         }
         if (runnable instanceof dev.langchain4j.agentic.supervisor.SupervisorAgent supervisor) {
-            return input -> supervisor.invoke(userMessageFromScope(input));
+            return input -> supervisor.invokeWithAgenticScope(userMessageFromScope(input));
         }
         return input -> {
             try {
+                try {
+                    return runnable.getClass().getMethod("invokeWithAgenticScope", Map.class).invoke(runnable, input);
+                } catch (NoSuchMethodException ignored) {
+                }
                 return runnable.getClass().getMethod("invoke", Map.class).invoke(runnable, input);
             } catch (Exception e) {
                 throw new IllegalStateException("Cannot invoke entry runnable", e);
@@ -232,7 +236,8 @@ public class WorkflowGraphInterpreter {
         UntypedAgent[] subAgents = subIds.stream().map(runnables::get).map(UntypedAgent.class::cast).toArray(UntypedAgent[]::new);
         var builder = AgenticServices.sequenceBuilder()
                 .subAgents(subAgents)
-                .outputKey(node.outputKey() != null && !node.outputKey().isBlank() ? node.outputKey() : "result");
+                .outputKey(node.outputKey() != null && !node.outputKey().isBlank() ? node.outputKey() : "result")
+                .output(scope -> nonNullCompositeOutput(scope, node, "result"));
         runnables.put(node.id(), builder.build());
     }
 
@@ -252,7 +257,8 @@ public class WorkflowGraphInterpreter {
         UntypedAgent[] subAgents = subIds.stream().map(runnables::get).map(UntypedAgent.class::cast).toArray(UntypedAgent[]::new);
         var builder = AgenticServices.parallelBuilder()
                 .subAgents(subAgents)
-                .outputKey(node.outputKey() != null && !node.outputKey().isBlank() ? node.outputKey() : "result");
+                .outputKey(node.outputKey() != null && !node.outputKey().isBlank() ? node.outputKey() : "result")
+                .output(scope -> nonNullCompositeOutput(scope, node, "result"));
         Integer poolSize = node.threadPoolSize();
         if (poolSize != null && poolSize > 0) {
             builder.executor(Executors.newFixedThreadPool(poolSize));
@@ -288,6 +294,7 @@ public class WorkflowGraphInterpreter {
         if (node.outputKey() != null && !node.outputKey().isBlank()) {
             condBuilder.outputKey(node.outputKey());
         }
+        condBuilder.output(scope -> nonNullCompositeOutput(scope, node, "result"));
         runnables.put(node.id(), condBuilder.build());
     }
 
@@ -320,6 +327,7 @@ public class WorkflowGraphInterpreter {
         if (node.outputKey() != null && !node.outputKey().isBlank()) {
             builder.outputKey(node.outputKey());
         }
+        builder.output(scope -> nonNullCompositeOutput(scope, node, "response"));
         String strategy = node.responseStrategy();
         if (strategy != null && !strategy.isBlank()) {
             try {
@@ -329,6 +337,23 @@ public class WorkflowGraphInterpreter {
             }
         }
         runnables.put(node.id(), builder.build());
+    }
+
+    private Object nonNullCompositeOutput(AgenticScope scope, WorkflowNodeDto node, String defaultKey) {
+        if (scope == null) {
+            return "";
+        }
+        String key = node.outputKey() != null && !node.outputKey().isBlank() ? node.outputKey() : defaultKey;
+        Object direct = scope.readState(key);
+        if (direct != null) {
+            return direct;
+        }
+        Map<?, ?> state = scope.state();
+        if (state == null || state.isEmpty()) {
+            return "";
+        }
+        String formatted = formatMap(state);
+        return formatted != null ? formatted : "";
     }
 
     /**

@@ -47,9 +47,10 @@ The editor uses a **three-column layout** similar to n8n:
    - **Layout** — arranges the graph in an orchestrator-style flow. If an **entry node** is set: entry is on the **left**, and nodes that feed into it (sub-agents, then LLMs) fan out to the **right** with clear vertical spacing for parallel branches. If no entry is set: roots (e.g. LLMs) are on the left, entry/sinks on the right.
    - **Save**, **Run**, **Delete** — save the workflow, run it, or delete it (Run/Delete only for saved workflows).
 
-2. **Left panel — Add step**
+2. **Left panel — Add step + Agents**
    - A vertical list of node types: **LLM**, **Agent**, **Supervisor**, **Sequence**, **Parallel**, **Conditional**.
    - Click a type to add that node to the **center** canvas.
+   - Includes an **Agents** list (agent + supervisor nodes already in the workflow). Click one to focus/select it on the canvas.
 
 3. **Center — Canvas**
    - The flow graph: nodes and edges.
@@ -98,7 +99,7 @@ The editor uses a **three-column layout** similar to n8n:
     - **Role** — short role label for that agent.
     - **System message** — system instruction for that specific agent/sub-agent.
     - **Prompt template** — per-agent prompt template. Supports placeholders like `{{metadata.prompt}}`, `{{metadata.topic}}`, `{{metadata.style}}`.
-- **Set as entry** — mark this node as the one that runs when you click **Run**. Exactly one node should be the entry (usually a Sequence, Parallel, Conditional, or Supervisor).
+- **Set as entry** — mark this node as the one that runs when you click **Run**. Exactly one node should be the entry (usually a Sequence or Supervisor; `parallel` is often better as an inner step).
 - **Delete node** — remove this node from the canvas (and any edges to/from it). You can also select the node and press **Delete** or **Backspace**.
 
 ### 4.4 Save
@@ -131,7 +132,9 @@ The **Run** dialog opens:
 
 1. **Input (JSON)** — a text area with a JSON object, e.g. `{ "metadata": { "prompt": "Hello", "topic": "test" } }`. Edit it to match what your workflow expects (e.g. `metadata.topic`, `metadata.style`, `metadata.mood`).
 2. Click **Run**. The app calls the run API and shows the **Result** (or an error).
-3. **Close** — closes the dialog.
+3. The dialog also shows **Executed nodes** from run trace metadata.
+4. In the editor view, nodes executed in the last run are highlighted on the canvas.
+5. **Close** — closes the dialog.
 
 If the backend or LLM returns an error, it is shown in the dialog instead of a result.
 
@@ -147,7 +150,7 @@ If the backend or LLM returns an error, it is shown in the dialog instead of a r
 | Delete a workflow | List → **Delete** on a row (confirm), or Editor → **Delete workflow** (confirm) |
 | Add a node | Editor → left panel **Add node** → click type (LLM, Agent, …) |
 | Connect two nodes | Editor → drag from one node’s handle to another’s |
-| Set entry node | Editor → select node → left panel **Set as entry** |
+| Set entry node | Editor → select node → right panel **Set as entry** |
 | Edit node fields | Editor → select node → right panel (ID, type-specific fields) |
 | Delete a node | Editor → select node → press **Delete**/ **Backspace**, or right panel **Delete node** |
 | Go back to list | Editor → **← Back** |
@@ -156,7 +159,7 @@ If the backend or LLM returns an error, it is shown in the dialog instead of a r
 
 ## 7. Tips
 
-- **Entry node:** Usually the entry is a **Sequence**, **Parallel**, **Conditional**, or **Supervisor** that then uses the agents and LLM. Set it explicitly with **Set as entry**.
+- **Entry node:** Usually the entry is a **Sequence** or **Supervisor** that then uses agents and LLMs. `Parallel` can be entry, but results are usually clearer when parallel work is followed by a composing agent.
 - **LLM ID:** For Agent/Supervisor nodes, the **LLM ID** field should match the **ID** of an LLM node. You can also connect the LLM node to the Agent with an edge; the converter may derive the LLM from the edge.
 - **Save often:** Changes on the canvas are only in the browser until you click **Save**. After saving, **Run** and **Delete workflow** are available for that workflow.
 - **Errors:** If Save or Run fails, the message is shown in the top bar (editor) or in the Run dialog. Fix the graph or input and try again.

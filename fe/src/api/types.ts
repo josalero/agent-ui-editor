@@ -62,6 +62,8 @@ export interface WorkflowIdResponse {
 
 export interface RunWorkflowResponse {
   result: string
+  executedNodeIds?: string[]
+  executedNodeNames?: string[]
 }
 
 /** One available tool from GET /api/v1/tools */

@@ -42,7 +42,14 @@ Use `metadata` for run input. Example:
 
 The backend uses `metadata.prompt` as the primary prompt and treats other `metadata.*` keys as context.
 
-Note: a `parallel` node as the entry may not return a direct text result. Prefer `sequence`/`supervisor` as entry and place `parallel` inside it, followed by a composing agent.
+`parallel` can be used as an entry node, but for clearer final responses prefer `sequence`/`supervisor` as entry and place `parallel` inside it, followed by a composing agent.
+
+Run responses also include execution trace fields:
+
+- `executedNodeIds`: node IDs that were executed (ordered, deduplicated).
+- `executedNodeNames`: human-readable names for those executed nodes.
+
+The editor uses this to highlight executed nodes after each run.
 
 ## Sub-Agent Prompt Configuration
 
@@ -83,7 +90,16 @@ Example agent node:
 
 - [docs/agent-editor.md](docs/agent-editor.md): main user/developer guide.
 - [docs/agent-editor-ui-guide.md](docs/agent-editor-ui-guide.md): detailed UI usage.
-- [agent-editor-plan.md](agent-editor-plan.md): implementation plan and architecture notes.
+
+## Testing
+
+```bash
+# Backend tests (includes sample workflow integration coverage)
+./gradlew :be:test
+
+# Run only sample workflow integration test
+./gradlew :be:test --tests '*SampleWorkflowsIntegrationTest'
+```
 
 ## Security Notes
 
