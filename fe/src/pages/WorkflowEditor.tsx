@@ -98,7 +98,7 @@ function buildToolNodes(nodes: Node<NodeData>[]): Node<NodeData>[] {
     const ownerType = (owner.data?.type as string | undefined)?.toLowerCase()
     if (ownerType !== 'agent' && ownerType !== 'supervisor') continue
     const toolsList = getToolsList(owner.data)
-    const dependencyBaseX = owner.position.x + 300
+    const dependencyBaseX = owner.position.x + 280
     const dependencyBaseY = owner.position.y + 4
     toolsList.forEach((tool, index) => {
       created.push({

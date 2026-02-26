@@ -32,6 +32,44 @@ Default port is `8085` (see `be/src/main/resources/application.yml`).
 - Workflow CRUD + run API.
 - Example workflows are refreshed at backend startup (same sample names are updated in place).
 
+## Visual Workflow Example
+
+```mermaid
+flowchart LR
+  seq["SEQUENCE<br/>seq-story<br/><small>story<br/>Entry</small>"]
+  writer["AGENT<br/>CreativeWriter<br/><small>Story writer<br/>Executed</small>"]
+  editor["AGENT<br/>StyleEditor<br/><small>Story editor<br/>Executed</small>"]
+  llmWriter["LLM<br/>llm-writer<br/><small>openai/gpt-4o-mini</small>"]
+  llmEditor["LLM<br/>llm-editor<br/><small>openai/gpt-4o-mini</small>"]
+  toolCalc["TOOL<br/>Calculator<br/><small>Evaluate arithmetic expressions</small>"]
+  toolTime["TOOL<br/>Time<br/><small>Current date/time</small>"]
+
+  seq -. "delegates" .-> writer
+  seq -. "delegates" .-> editor
+
+  writer -. "model" .-> llmWriter
+  editor -. "model" .-> llmEditor
+
+  writer -. "tool" .-> toolCalc
+  editor -. "tool" .-> toolTime
+
+  classDef sequence fill:#dff4ea,stroke:#0f766e,stroke-width:2.2px,color:#14532d;
+  classDef agent fill:#f5f3ff,stroke:#6d28d9,stroke-width:2px,color:#312e81;
+  classDef llm fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a;
+  classDef tool fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12;
+  classDef executed stroke:#22c55e,stroke-width:3px;
+
+  class seq sequence;
+  class writer,editor agent;
+  class llmWriter,llmEditor llm;
+  class toolCalc,toolTime tool;
+  class writer,editor executed;
+
+  linkStyle 0,1 stroke:#0f766e,stroke-width:2.4px,stroke-dasharray:6 5;
+  linkStyle 2,3 stroke:#2563eb,stroke-width:2.2px,stroke-dasharray:6 4;
+  linkStyle 4,5 stroke:#c2410c,stroke-width:2.2px,stroke-dasharray:2 5;
+```
+
 ## Run Payload Format
 
 Use `metadata` for run input. Example:
