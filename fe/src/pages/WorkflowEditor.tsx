@@ -54,9 +54,13 @@ interface ToolRef {
   description?: string
 }
 
+const TOOLS_DEBUG = true // set to false to disable tool-display logs
+
 function getToolsList(data: NodeData | undefined): ToolRef[] {
-  if (!data) return []
-  // Prefer full tools array (id + description); support any shape from API
+  if (!data) {
+    if (TOOLS_DEBUG) console.log('[WorkflowEditor:tools] getToolsList: no data')
+    return []
+  }
   const rawTools = (data as Record<string, unknown>).tools ?? data.tools
   if (rawTools != null && Array.isArray(rawTools) && rawTools.length > 0) {
     const list: ToolRef[] = []
@@ -66,10 +70,16 @@ function getToolsList(data: NodeData | undefined): ToolRef[] {
       const id = o.id != null ? String(o.id).trim() : ''
       if (id.length > 0) list.push({ id, description: o.description != null ? String(o.description) : undefined })
     }
+    if (TOOLS_DEBUG && (data.id || data.type)) {
+      console.log('[WorkflowEditor:tools] getToolsList: node', data.id, data.type, '→ tools', list.length, list.map((x) => x.id))
+    }
     if (list.length > 0) return list
   }
   const raw = data.toolIds as string[] | string | undefined
   const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : typeof raw === 'string' && raw.length > 0 ? [raw] : []
+  if (TOOLS_DEBUG && (data.id || data.type) && (raw != null || ids.length > 0)) {
+    console.log('[WorkflowEditor:tools] getToolsList: node', data.id, data.type, '→ toolIds fallback', ids.length, ids)
+  }
   return ids.map((id) => ({ id }))
 }
 
@@ -79,6 +89,39 @@ function toolLabel(tool: ToolRef): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ')
+}
+
+/** Build tool nodes from persist nodes (agents/supervisors with tools). Used so tool nodes live in state and render. */
+function buildToolNodes(nodes: Node<NodeData>[]): Node<NodeData>[] {
+  const created: Node<NodeData>[] = []
+  for (const owner of nodes) {
+    const ownerType = (owner.data?.type as string | undefined)?.toLowerCase()
+    if (ownerType !== 'agent' && ownerType !== 'supervisor') continue
+    const toolsList = getToolsList(owner.data)
+    const dependencyBaseX = owner.position.x + 300
+    const dependencyBaseY = owner.position.y + 4
+    toolsList.forEach((tool, index) => {
+      created.push({
+        id: toolNodeId(owner.id, tool.id),
+        type: 'tool',
+        draggable: true,
+        selectable: true,
+        connectable: false,
+        zIndex: 10,
+        position: { x: dependencyBaseX, y: dependencyBaseY + index * 96 },
+        data: {
+          id: toolNodeId(owner.id, tool.id),
+          type: 'tool',
+          label: toolLabel(tool),
+          toolId: tool.id,
+          description: tool.description,
+          parentAgentId: (owner.data?.name ?? owner.id) as string,
+          isVisualOnly: true,
+        },
+      })
+    })
+  }
+  return created
 }
 
 function createNodeData(kind: NodeKind): NodeData {
@@ -124,13 +167,34 @@ export default function WorkflowEditor() {
       setLoading(false)
       return
     }
+    if (TOOLS_DEBUG) console.log('[WorkflowEditor:tools] loading workflow id=', id)
     getWorkflow(id)
       .then((w) => {
+        if (TOOLS_DEBUG) {
+          const withTools = w.nodes?.filter((nd) => {
+            const r = nd as unknown as Record<string, unknown>
+            const tl = r?.tools as unknown[] | undefined
+            const ti = r?.toolIds as unknown[] | undefined
+            return (Array.isArray(tl) && tl.length > 0) || (Array.isArray(ti) && ti.length > 0)
+          }) ?? []
+          console.log('[WorkflowEditor:tools] workflow loaded', w.name, 'nodes:', w.nodes?.length, 'with tools/toolIds:', withTools.length, withTools.map((nd) => ({ id: (nd as { id?: string }).id, type: (nd as { type?: string }).type, tools: (nd as unknown as Record<string, unknown>).tools, toolIds: (nd as unknown as Record<string, unknown>).toolIds })))
+        }
         setWorkflowName(w.name)
         setEntryNodeId(w.entryNodeId)
         const { nodes: n, edges: e } = graphToReactFlow(w.nodes, w.entryNodeId)
+        if (TOOLS_DEBUG) {
+          const withToolsData = n.filter((nd) => {
+            const d = nd.data as Record<string, unknown> | undefined
+            if (!d) return false
+            const tl = d.tools as unknown[] | undefined
+            const ti = d.toolIds as unknown[] | undefined
+            return (Array.isArray(tl) && tl.length > 0) || (Array.isArray(ti) && ti.length > 0)
+          })
+          console.log('[WorkflowEditor:tools] after graphToReactFlow: nodes', n.length, 'with data.tools/toolIds', withToolsData.length, withToolsData.map((nd) => ({ id: nd.id, type: nd.data?.type, tools: (nd.data as unknown as Record<string, unknown>)?.tools, toolIds: (nd.data as unknown as Record<string, unknown>)?.toolIds })))
+        }
         const layouted = applyLayout(n, e, w.entryNodeId)
-        setNodes(layouted)
+        const withTools = [...layouted, ...buildToolNodes(layouted)]
+        setNodes(withTools)
         setEdges(e)
         setLastRunExecutedCount(0)
       })
@@ -213,9 +277,14 @@ export default function WorkflowEditor() {
     []
   )
 
+  const persistNodes = useMemo(
+    () => nodes.filter((n) => n.data?.type !== 'tool'),
+    [nodes]
+  )
+
   const agentsInWorkflow = useMemo(
     () =>
-      nodes
+      persistNodes
         .filter((n) => n.data?.type === 'agent' || n.data?.type === 'supervisor')
         .map((n) => ({
           id: n.id,
@@ -223,7 +292,7 @@ export default function WorkflowEditor() {
           type: n.data?.type as 'agent' | 'supervisor',
         }))
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [nodes]
+    [persistNodes]
   )
 
   const handleSelectAgentFromPanel = useCallback(
@@ -243,59 +312,33 @@ export default function WorkflowEditor() {
   )
 
   const persistEdges = useMemo(() => {
-    const derived = deriveEdgesFromNodes(nodes)
+    const derived = deriveEdgesFromNodes(persistNodes)
     const derivedKey = new Set(derived.map((e) => `${e.source}-${e.target}`))
     const extra = edges.filter((e) => !derivedKey.has(`${e.source}-${e.target}`))
     return [...derived, ...extra]
-  }, [nodes, edges])
+  }, [persistNodes, edges])
 
-  const toolNodes = useMemo<Node<NodeData>[]>(() => {
-    const created: Node<NodeData>[] = []
-    const xs = nodes.map((n) => n.position.x)
-    const minX = xs.length > 0 ? Math.min(...xs) : 0
-    const maxX = xs.length > 0 ? Math.max(...xs) : 0
-    for (const owner of nodes) {
-      const ownerType = (owner.data?.type as string | undefined)?.toLowerCase()
-      if (ownerType !== 'agent' && ownerType !== 'supervisor') continue
-      const toolsList = getToolsList(owner.data)
-      const roomLeft = owner.position.x - minX
-      const roomRight = maxX - owner.position.x
-      const placeRight = roomRight >= roomLeft
-      const dependencyBaseX = placeRight ? owner.position.x + 220 : owner.position.x - 220
-      const dependencyBaseY = owner.position.y + 4
-      toolsList.forEach((tool, index) => {
-        const row = index
-        created.push({
-          id: toolNodeId(owner.id, tool.id),
-          type: 'tool',
-          draggable: false,
-          selectable: true,
-          connectable: false,
-          zIndex: 10,
-          position: {
-            x: dependencyBaseX,
-            y: dependencyBaseY + row * 96,
-          },
-          data: {
-            id: toolNodeId(owner.id, tool.id),
-            type: 'tool',
-            label: toolLabel(tool),
-            toolId: tool.id,
-            description: tool.description,
-            parentAgentId: (owner.data?.name ?? owner.id) as string,
-            isVisualOnly: true,
-          },
-        })
+  // Keep tool nodes in state so React Flow renders them; sync when persist nodes or their tools change.
+  // Preserve positions of existing tool nodes so drag-and-drop is kept.
+  useEffect(() => {
+    setNodes((prev) => {
+      const persist = prev.filter((n) => n.data?.type !== 'tool')
+      const tools = buildToolNodes(persist)
+      const existingToolNodes = prev.filter((n) => n.data?.type === 'tool')
+      const toolsMerged = tools.map((tnew) => {
+        const existing = existingToolNodes.find((e) => e.id === tnew.id)
+        if (existing) return { ...tnew, position: existing.position }
+        return tnew
       })
-    }
-    return created
-  }, [nodes])
-
-  const displayNodes = useMemo(() => [...nodes, ...toolNodes], [nodes, toolNodes])
+      const next = [...persist, ...toolsMerged]
+      if (next.length === prev.length && next.every((node, i) => node.id === prev[i]?.id)) return prev
+      return next
+    })
+  }, [nodes, setNodes])
 
   const toolEdges = useMemo<Edge[]>(
     () =>
-      nodes.flatMap((owner) => {
+      persistNodes.flatMap((owner) => {
         const ownerType = (owner.data?.type as string | undefined)?.toLowerCase()
         if (ownerType !== 'agent' && ownerType !== 'supervisor') return []
         const toolsList = getToolsList(owner.data)
@@ -305,15 +348,26 @@ export default function WorkflowEditor() {
           target: toolNodeId(owner.id, tool.id),
         }))
       }),
-    [nodes]
+    [persistNodes]
   )
+
+  // Refit view when tool nodes exist so they are not off-screen
+  const toolNodeCount = nodes.filter((n) => n.data?.type === 'tool').length
+  useEffect(() => {
+    if (flow && toolNodeCount > 0) {
+      const t = setTimeout(() => {
+        flow.fitView({ padding: 0.15, duration: 200 })
+      }, 100)
+      return () => clearTimeout(t)
+    }
+  }, [flow, toolNodeCount])
 
   const displayEdges = useMemo(() => [...persistEdges, ...toolEdges], [persistEdges, toolEdges])
 
   const edgesWithLabels = useMemo<Edge[]>(
     () =>
       displayEdges.map((e) => {
-        const { edge: visualEdge, kind } = toVisualEdge(displayNodes, e)
+        const { edge: visualEdge, kind } = toVisualEdge(nodes, e)
         const labelByKind: Record<string, string> = {
           'sub-agent': 'delegates',
           llm: 'model',
@@ -321,7 +375,7 @@ export default function WorkflowEditor() {
           branch: 'branch',
           tool: 'tool',
         }
-        const label = labelByKind[kind] ?? getEdgeLabel(displayNodes, visualEdge)
+        const label = labelByKind[kind] ?? getEdgeLabel(nodes, visualEdge)
         const styleByKind: Record<string, { stroke: string; strokeWidth: number; strokeDasharray?: string }> = {
           'sub-agent': { stroke: '#0f766e', strokeWidth: 2.6 },
           llm: { stroke: '#2563eb', strokeWidth: 2.2, strokeDasharray: '7 5' },
@@ -332,12 +386,15 @@ export default function WorkflowEditor() {
         }
         const edgeStyle = styleByKind[kind] ?? styleByKind.custom
         const isDependencyEdge = kind === 'llm' || kind === 'router' || kind === 'tool'
+        const toolEdge = kind === 'tool'
+        const sourceHandle = toolEdge ? 'tool-out' : isDependencyEdge ? 'dep-out' : 'main-out'
+        const targetHandle = toolEdge ? 'tool-in' : isDependencyEdge ? 'dep-in' : 'main-in'
         return {
           ...visualEdge,
           type: isDependencyEdge ? 'smoothstep' : 'bezier',
           animated: kind === 'sub-agent' || kind === 'branch' || kind === 'tool',
-          sourceHandle: isDependencyEdge ? 'dep-out' : 'main-out',
-          targetHandle: isDependencyEdge ? 'dep-in' : 'main-in',
+          sourceHandle,
+          targetHandle,
           ...(label ? { label } : {}),
           style: edgeStyle,
           labelStyle: {
@@ -354,21 +411,21 @@ export default function WorkflowEditor() {
           markerEnd: { type: MarkerType.ArrowClosed, color: edgeStyle.stroke },
         }
       }),
-    [displayNodes, displayEdges]
+    [nodes, displayEdges]
   )
 
   const handleSave = useCallback(async () => {
     const entry = entryNodeId
-    if (!entry || nodes.length === 0) {
+    if (!entry || persistNodes.length === 0) {
       setError('Add at least one node and set an entry node.')
       return
     }
-    const entryNode = nodes.find((n) => n.id === entry)
+    const entryNode = persistNodes.find((n) => n.id === entry)
     if (!entryNode || !ENTRY_NODE_TYPES.has(entryNode.data?.type ?? '')) {
       setError('Entry node must be sequence, parallel, or supervisor.')
       return
     }
-    const payload = reactFlowToGraph(workflowName, nodes, persistEdges, entry)
+    const payload = reactFlowToGraph(workflowName, persistNodes, persistEdges, entry)
     setSaving(true)
     setError(null)
     try {
@@ -383,7 +440,7 @@ export default function WorkflowEditor() {
     } finally {
       setSaving(false)
     }
-  }, [workflowName, entryNodeId, nodes, persistEdges, id, navigate])
+  }, [workflowName, entryNodeId, persistNodes, persistEdges, id, navigate])
 
   const handleDeleteWorkflow = useCallback(async () => {
     if (!id) return
@@ -411,7 +468,11 @@ export default function WorkflowEditor() {
   )
 
   const handleLayout = useCallback(() => {
-    setNodes((prev) => applyLayout(prev, persistEdges, entryNodeId))
+    setNodes((prev) => {
+      const persist = prev.filter((n) => n.data?.type !== 'tool')
+      const layouted = applyLayout(persist, persistEdges, entryNodeId)
+      return [...layouted, ...buildToolNodes(layouted)]
+    })
     requestAnimationFrame(() => {
       flow?.fitView({ duration: 320, padding: 0.22 })
     })
@@ -504,7 +565,7 @@ export default function WorkflowEditor() {
         {/* Center: Canvas */}
         <main className="flex-1 min-w-0 bg-slate-100/80">
           <ReactFlow
-            nodes={displayNodes}
+            nodes={nodes}
             edges={edgesWithLabels}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -537,7 +598,7 @@ export default function WorkflowEditor() {
           <div className="flex-1 overflow-auto">
             <NodeConfigPanel
               node={selectedNode}
-              allNodes={displayNodes}
+              allNodes={nodes}
               allEdges={displayEdges}
               onUpdate={onUpdateNodeData}
               onSetEntry={onSetEntry}

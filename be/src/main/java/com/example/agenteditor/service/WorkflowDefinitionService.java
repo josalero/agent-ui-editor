@@ -1,6 +1,7 @@
 package com.example.agenteditor.service;
 
 import com.example.agenteditor.api.WorkflowNotFoundException;
+import com.example.agenteditor.api.v1.dto.ToolInfoDto;
 import com.example.agenteditor.api.v1.dto.WorkflowCreateRequest;
 import com.example.agenteditor.api.v1.dto.WorkflowListItem;
 import com.example.agenteditor.api.v1.dto.WorkflowNodeDto;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static java.util.Collections.unmodifiableList;
@@ -130,15 +132,64 @@ public class WorkflowDefinitionService {
         return new WorkflowListItem(entity.getId(), entity.getName(), entity.getUpdatedAt());
     }
 
+    /** Tool id -> description for enriching nodes that have toolIds but no tools (so canvas can render tool nodes). */
+    private static final Map<String, String> TOOL_DESCRIPTIONS = Map.of(
+            "time", "Current date and time in UTC (ISO-8601)",
+            "calculator", "Evaluate arithmetic expressions (e.g. 2 + 3 * 4)"
+    );
+
     private WorkflowResponse toResponse(WorkflowDefinition entity) {
         List<WorkflowNodeDto> nodes = readNodesFromJson(entity.getGraphJson());
+        List<WorkflowNodeDto> enriched = enrichNodesWithTools(nodes);
         return new WorkflowResponse(
                 entity.getId(),
                 entity.getName(),
                 entity.getEntryNodeId(),
-                nodes,
+                enriched,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
+        );
+    }
+
+    /**
+     * For any node that has toolIds but no tools array, populate tools from known descriptions
+     * so the frontend canvas can render tool nodes.
+     */
+    private List<WorkflowNodeDto> enrichNodesWithTools(List<WorkflowNodeDto> nodes) {
+        return nodes.stream()
+                .map(this::enrichNodeWithTools)
+                .toList();
+    }
+
+    private WorkflowNodeDto enrichNodeWithTools(WorkflowNodeDto node) {
+        boolean hasToolIds = node.toolIds() != null && !node.toolIds().isEmpty();
+        boolean missingTools = node.tools() == null || node.tools().isEmpty();
+        if (!hasToolIds || !missingTools) {
+            return node;
+        }
+        List<ToolInfoDto> tools = node.toolIds().stream()
+                .map(id -> new ToolInfoDto(id, TOOL_DESCRIPTIONS.getOrDefault(id, "")))
+                .toList();
+        return new WorkflowNodeDto(
+                node.id(),
+                node.type(),
+                node.baseUrl(),
+                node.modelName(),
+                node.temperature(),
+                node.maxTokens(),
+                node.llmId(),
+                node.name(),
+                node.role(),
+                node.systemMessage(),
+                node.promptTemplate(),
+                node.outputKey(),
+                tools,
+                node.toolIds(),
+                node.subAgentIds(),
+                node.responseStrategy(),
+                node.routerAgentId(),
+                node.branches(),
+                node.threadPoolSize()
         );
     }
 

@@ -115,7 +115,13 @@ export default function BaseNode({ data, type = 'agent', selected }: NodeProps) 
         type="source"
         id="main-out"
         position={Position.Right}
-        style={{ width: 8, height: 8, background: '#0f172a', border: '1px solid #fff', right: -5, display: isTool ? 'none' : 'block' }}
+        style={{ width: 8, height: 8, background: '#0f172a', border: '1px solid #fff', right: -5, top: '50%', transform: 'translateY(-50%)', display: isTool ? 'none' : 'block' }}
+      />
+      <Handle
+        type="source"
+        id="tool-out"
+        position={Position.Right}
+        style={{ width: 6, height: 6, background: '#c2410c', border: '1px solid #fff', right: -4, bottom: 12, display: isTool || type === 'llm' ? 'none' : 'block' }}
       />
       <Handle
         type="target"
@@ -128,6 +134,12 @@ export default function BaseNode({ data, type = 'agent', selected }: NodeProps) 
         id="dep-out"
         position={Position.Bottom}
         style={{ width: 6, height: 6, background: '#64748b', border: '1px solid #fff', bottom: -4, display: isTool ? 'none' : 'block' }}
+      />
+      <Handle
+        type="target"
+        id="tool-in"
+        position={Position.Left}
+        style={{ width: 6, height: 6, background: '#c2410c', border: '1px solid #fff', left: -4, display: isTool ? 'block' : 'none' }}
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <span

@@ -1,7 +1,11 @@
 import type { WorkflowNodeDto, NodeToolDto } from '../api/types'
 
+const TOOLS_DEBUG = true // set to false to disable (must match WorkflowEditor if desired)
+
 /** Normalize tools from API: prefer tools[] (id + description), fallback to toolIds[]. */
 function normalizeTools(dto: WorkflowNodeDto): NodeToolDto[] | undefined {
+  const dtoId = (dto as { id?: string }).id
+  const dtoType = (dto as { type?: string }).type
   const rawTools = (dto as unknown as Record<string, unknown>).tools ?? dto.tools
   if (rawTools != null && Array.isArray(rawTools) && rawTools.length > 0) {
     const list: NodeToolDto[] = []
@@ -18,6 +22,9 @@ function normalizeTools(dto: WorkflowNodeDto): NodeToolDto[] | undefined {
         }
       }
     }
+    if (TOOLS_DEBUG && list.length > 0) {
+      console.log('[WorkflowEditor:tools] normalizeTools: node', dtoId, dtoType, '→ from tools', list.length, list.map((x) => x.id))
+    }
     if (list.length > 0) return list
   }
   const rawIds = (dto as unknown as Record<string, unknown>).toolIds ?? dto.toolIds
@@ -27,6 +34,9 @@ function normalizeTools(dto: WorkflowNodeDto): NodeToolDto[] | undefined {
     : typeof rawIds === 'string' && (rawIds as string).length > 0
       ? [rawIds as string]
       : []
+  if (TOOLS_DEBUG && ids.length > 0) {
+    console.log('[WorkflowEditor:tools] normalizeTools: node', dtoId, dtoType, '→ from toolIds', ids.length, ids)
+  }
   return ids.length > 0 ? ids.map((id) => ({ id, description: undefined })) : undefined
 }
 
