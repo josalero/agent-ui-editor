@@ -1,0 +1,28 @@
+// Frontend module: placeholder build until Vite+React in Iteration 8.
+// Runs npm install (no-op if no deps) and npm run build to produce fe/dist/.
+
+plugins {
+    id 'base'
+}
+
+def feDir = project.layout.projectDirectory
+
+tasks.register('npmInstall', Exec) {
+    description = 'Install npm dependencies'
+    group = 'node'
+    workingDir = feDir.asFile
+    commandLine 'npm', 'install'
+    onlyIf { file("${feDir.asFile}/package.json").exists() }
+}
+
+tasks.register('npmRunBuild', Exec) {
+    description = 'Build frontend production bundle'
+    group = 'node'
+    dependsOn npmInstall
+    workingDir = feDir.asFile
+    commandLine 'npm', 'run', 'build'
+}
+
+tasks.named('build') {
+    dependsOn npmRunBuild
+}

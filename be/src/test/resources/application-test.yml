@@ -1,0 +1,9 @@
+# Test profile: JPA creates schema so slice tests don't depend on Flyway.
+# OpenRouter: use env OPENROUTER_API_KEY; default is a non-secret placeholder so the factory bean can be created (no real API calls in tests).
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+openrouter:
+  api-key: ${OPENROUTER_API_KEY:test-placeholder-no-real-calls}

@@ -1,0 +1,47 @@
+# Gradle
+.gradle/
+build/
+
+# Java / JVM
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.log
+hs_err_pid*
+replay_pid*
+.mtj.tmp/
+out/
+*.orig
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.cursor/
+
+# Local config / secrets (never commit)
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.properties
+*-local.yml
+*-local.properties
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+
+# Test / coverage
+test-output/
+jacoco.exec
+jacoco.xml
+
+# OS
+.DS_Store
+Thumbs.db

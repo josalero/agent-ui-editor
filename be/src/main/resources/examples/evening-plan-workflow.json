@@ -1,0 +1,36 @@
+{
+  "name": "Evening plan workflow",
+  "entryNodeId": "parallel-plan",
+  "nodes": [
+    {
+      "id": "llm-1",
+      "type": "llm",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "modelName": "openai/gpt-4o-mini"
+    },
+    {
+      "id": "movies",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "MovieExpert",
+      "outputKey": "movies"
+    },
+    {
+      "id": "meals",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "MealExpert",
+      "outputKey": "meals"
+    },
+    {
+      "id": "parallel-plan",
+      "type": "parallel",
+      "subAgentIds": [
+        "movies",
+        "meals"
+      ],
+      "outputKey": "plan",
+      "threadPoolSize": 2
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+// Root project: no application code, only subproject configuration
+subprojects {
+    // Optional: shared conventions can go here
+}

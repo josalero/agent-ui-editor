@@ -1,0 +1,15 @@
+{
+  "name": "Supervisor workflow",
+  "entryNodeId": "sup",
+  "nodes": [
+    { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
+    { "id": "assistant", "type": "agent", "llmId": "llm-1", "name": "Assistant", "outputKey": "response", "toolIds": ["time", "calculator"] },
+    { "id": "writer", "type": "agent", "llmId": "llm-1", "name": "Writer", "outputKey": "story" },
+    { "id": "editor", "type": "agent", "llmId": "llm-1", "name": "Editor", "outputKey": "story" },
+    { "id": "seq-story", "type": "sequence", "subAgentIds": ["writer", "editor"], "outputKey": "story" },
+    { "id": "movies", "type": "agent", "llmId": "llm-1", "name": "MovieExpert", "outputKey": "movies" },
+    { "id": "meals", "type": "agent", "llmId": "llm-1", "name": "MealExpert", "outputKey": "meals" },
+    { "id": "parallel-plan", "type": "parallel", "subAgentIds": ["movies", "meals"], "outputKey": "plan" },
+    { "id": "sup", "type": "supervisor", "llmId": "llm-1", "subAgentIds": ["assistant", "seq-story", "parallel-plan"], "responseStrategy": "LAST" }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Story workflow",
+  "entryNodeId": "seq-story",
+  "nodes": [
+    { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
+    { "id": "writer", "type": "agent", "llmId": "llm-1", "name": "CreativeWriter", "outputKey": "story" },
+    { "id": "editor", "type": "agent", "llmId": "llm-1", "name": "StyleEditor", "outputKey": "story" },
+    { "id": "seq-story", "type": "sequence", "subAgentIds": ["writer", "editor"], "outputKey": "story" }
+  ]
+}
