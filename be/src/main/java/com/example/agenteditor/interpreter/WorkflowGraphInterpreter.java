@@ -18,8 +18,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Interprets a workflow graph (all node types) and builds a runnable for the entry node.
@@ -28,6 +29,7 @@ public class WorkflowGraphInterpreter {
 
     private static final Logger log = LoggerFactory.getLogger(WorkflowGraphInterpreter.class);
     private static final List<String> VALID_ENTRY_TYPES = List.of("agent", "sequence", "parallel", "conditional", "supervisor");
+    private static final Pattern TEMPLATE_VAR_PATTERN = Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_.-]+)\\s*}}");
 
     private final OpenRouterChatModelFactory chatModelFactory;
     private final ToolRegistry toolRegistry;
@@ -71,26 +73,7 @@ public class WorkflowGraphInterpreter {
                 buildAgent(node, chatModels, runnables);
             }
         }
-        for (WorkflowNodeDto node : nodes) {
-            if ("sequence".equals(node.type())) {
-                buildSequence(node, runnables);
-            }
-        }
-        for (WorkflowNodeDto node : nodes) {
-            if ("parallel".equals(node.type())) {
-                buildParallel(node, runnables);
-            }
-        }
-        for (WorkflowNodeDto node : nodes) {
-            if ("conditional".equals(node.type())) {
-                buildConditional(node, byId, runnables);
-            }
-        }
-        for (WorkflowNodeDto node : nodes) {
-            if ("supervisor".equals(node.type())) {
-                buildSupervisor(node, chatModels, runnables);
-            }
-        }
+        buildCompositeNodesUntilStable(nodes, chatModels, runnables);
 
         Object entryRunnable = runnables.get(entryNodeId);
         if (entryRunnable == null) {
@@ -98,6 +81,72 @@ public class WorkflowGraphInterpreter {
         }
         log.info("Runnable built successfully for entryNodeId={}", entryNodeId);
         return toWorkflowRunnable(entryRunnable);
+    }
+
+    private void buildCompositeNodesUntilStable(
+            List<WorkflowNodeDto> nodes,
+            Map<String, ChatModel> chatModels,
+            Map<String, Object> runnables
+    ) {
+        boolean progress;
+        do {
+            progress = false;
+            for (WorkflowNodeDto node : nodes) {
+                if (runnables.containsKey(node.id())) {
+                    continue;
+                }
+                String type = node.type();
+                if ("sequence".equals(type) && allBuilt(node.subAgentIds(), runnables)) {
+                    buildSequence(node, runnables);
+                    progress = true;
+                    continue;
+                }
+                if ("parallel".equals(type) && allBuilt(node.subAgentIds(), runnables)) {
+                    buildParallel(node, runnables);
+                    progress = true;
+                    continue;
+                }
+                if ("conditional".equals(type)
+                        && isBuilt(node.routerAgentId(), runnables)
+                        && allBranchesBuilt(node.branches(), runnables)) {
+                    buildConditional(node, runnables);
+                    progress = true;
+                    continue;
+                }
+                if ("supervisor".equals(type) && allBuilt(node.subAgentIds(), runnables)) {
+                    buildSupervisor(node, chatModels, runnables);
+                    progress = true;
+                }
+            }
+        } while (progress);
+    }
+
+    private boolean isBuilt(String id, Map<String, Object> runnables) {
+        return id != null && !id.isBlank() && runnables.containsKey(id);
+    }
+
+    private boolean allBuilt(List<String> ids, Map<String, Object> runnables) {
+        if (ids == null || ids.isEmpty()) {
+            return false;
+        }
+        for (String id : ids) {
+            if (id == null || id.isBlank() || !runnables.containsKey(id)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean allBranchesBuilt(List<ConditionalBranchDto> branches, Map<String, Object> runnables) {
+        if (branches == null || branches.isEmpty()) {
+            return false;
+        }
+        for (ConditionalBranchDto b : branches) {
+            if (b == null || b.agentId() == null || b.agentId().isBlank() || !runnables.containsKey(b.agentId())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private WorkflowRunnable toWorkflowRunnable(Object runnable) {
@@ -141,7 +190,11 @@ public class WorkflowGraphInterpreter {
         var builder = AgenticServices.agentBuilder()
                 .chatModel(chatModel)
                 .name(node.name() != null ? node.name() : node.id())
-                .userMessageProvider(this::userMessageFromScope);
+                .userMessageProvider(scope -> userMessageFromScope(scope, node.promptTemplate()));
+        String systemMessage = resolveSystemMessage(node);
+        if (systemMessage != null) {
+            builder.systemMessage(systemMessage);
+        }
         if (node.outputKey() != null && !node.outputKey().isBlank()) {
             builder.outputKey(node.outputKey());
         }
@@ -149,6 +202,18 @@ public class WorkflowGraphInterpreter {
             builder.tools(tools);
         }
         runnables.put(node.id(), builder.build());
+    }
+
+    private String resolveSystemMessage(WorkflowNodeDto node) {
+        String explicit = node.systemMessage();
+        if (explicit != null && !explicit.isBlank()) {
+            return explicit.trim();
+        }
+        String role = node.role();
+        if (role != null && !role.isBlank()) {
+            return "You are the " + role.trim() + ".";
+        }
+        return null;
     }
 
     private void buildSequence(WorkflowNodeDto node, Map<String, Object> runnables) {
@@ -195,7 +260,7 @@ public class WorkflowGraphInterpreter {
         runnables.put(node.id(), builder.build());
     }
 
-    private void buildConditional(WorkflowNodeDto node, Map<String, WorkflowNodeDto> byId, Map<String, Object> runnables) {
+    private void buildConditional(WorkflowNodeDto node, Map<String, Object> runnables) {
         if (runnables.containsKey(node.id())) return;
 
         String routerId = node.routerAgentId();
@@ -252,6 +317,9 @@ public class WorkflowGraphInterpreter {
                 .chatModel(chatModel)
                 .name(node.name() != null ? node.name() : node.id())
                 .subAgents(subAgents);
+        if (node.outputKey() != null && !node.outputKey().isBlank()) {
+            builder.outputKey(node.outputKey());
+        }
         String strategy = node.responseStrategy();
         if (strategy != null && !strategy.isBlank()) {
             try {
@@ -267,9 +335,13 @@ public class WorkflowGraphInterpreter {
      * Builds a user prompt from the agentic scope per framework contract.
      * UntypedAgent.invoke(@V("input") Map input) binds the run input to scope state under "input".
      * We read that map (or the scope state directly) and extract a prompt from "metadata"
-     * (preferred), then legacy "message", then fallback to formatted key-value pairs.
+     * (preferred), then fallback to formatted key-value pairs.
      */
     private String userMessageFromScope(Object scope) {
+        return userMessageFromScope(scope, null);
+    }
+
+    private String userMessageFromScope(Object scope, String promptTemplate) {
         if (scope == null) {
             log.debug("userMessageFromScope: scope=null");
             return "Please respond.";
@@ -282,6 +354,11 @@ public class WorkflowGraphInterpreter {
                 log.info("userMessageFromScope: using current managed scope keys={}", map.keySet());
             }
         }
+        String fromTemplate = messageFromTemplate(promptTemplate, map != null ? map : Map.of());
+        if (fromTemplate != null) {
+            log.info("userMessageFromScope: resolved prompt from template length={}", fromTemplate.length());
+            return fromTemplate;
+        }
         if (map != null && !map.isEmpty()) {
             String msg = messageFromMap(map);
             if (msg != null) {
@@ -293,6 +370,88 @@ public class WorkflowGraphInterpreter {
         String fallback = "default".equalsIgnoreCase(s != null ? s.trim() : "") ? "Please help me with a short task." : (s != null ? s : "Please respond.");
         log.warn("userMessageFromScope: no prompt in scope, using fallback length={}", fallback.length());
         return fallback;
+    }
+
+    private String messageFromTemplate(String promptTemplate, Map<?, ?> map) {
+        if (promptTemplate == null || promptTemplate.isBlank()) {
+            return null;
+        }
+        String rendered = renderTemplate(promptTemplate, map);
+        if (rendered == null || rendered.isBlank()) {
+            return null;
+        }
+        if ("default".equalsIgnoreCase(rendered.trim())) {
+            return "Please help me with a short task.";
+        }
+        return rendered;
+    }
+
+    private String renderTemplate(String template, Map<?, ?> map) {
+        if (template == null) {
+            return null;
+        }
+        Matcher matcher = TEMPLATE_VAR_PATTERN.matcher(template);
+        StringBuffer result = new StringBuffer();
+        boolean hadVariables = false;
+        while (matcher.find()) {
+            hadVariables = true;
+            String path = matcher.group(1);
+            String replacement = resolveTemplateValue(path, map);
+            if (replacement == null) {
+                replacement = "";
+            }
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(result);
+        String rendered = result.toString().trim();
+        if (!rendered.isBlank()) {
+            return rendered;
+        }
+        if (hadVariables) {
+            return null;
+        }
+        return template.trim();
+    }
+
+    private String resolveTemplateValue(String path, Map<?, ?> map) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        if ("prompt".equalsIgnoreCase(path)) {
+            return messageFromMap(map);
+        }
+        Object value = valueByPathIgnoreCase(map, path);
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isBlank() ? null : text;
+    }
+
+    private Object valueByPathIgnoreCase(Object source, String path) {
+        if (source == null || path == null || path.isBlank()) {
+            return null;
+        }
+        Object current = source;
+        String[] segments = path.split("\\.");
+        for (String segment : segments) {
+            if (!(current instanceof Map<?, ?> currentMap)) {
+                return null;
+            }
+            Object next = null;
+            for (Map.Entry<?, ?> entry : currentMap.entrySet()) {
+                Object key = entry.getKey();
+                if (key != null && segment.equalsIgnoreCase(key.toString())) {
+                    next = entry.getValue();
+                    break;
+                }
+            }
+            if (next == null) {
+                return null;
+            }
+            current = next;
+        }
+        return current;
     }
 
     private Map<?, ?> mapFromScope(Object scope) {
@@ -342,14 +501,6 @@ public class WorkflowGraphInterpreter {
         String fromMetadata = messageFromMetadata(metadata);
         if (fromMetadata != null) {
             return fromMetadata;
-        }
-        Object message = map.get("message");
-        if (message != null && !message.toString().isBlank()) {
-            String msg = message.toString().trim();
-            if ("default".equalsIgnoreCase(msg)) {
-                return "Please help me with a short task.";
-            }
-            return msg;
         }
         String formatted = formatMap(map);
         if (formatted != null && !formatted.isBlank() && !"default".equalsIgnoreCase(formatted.trim())) {

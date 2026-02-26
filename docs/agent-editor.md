@@ -54,6 +54,7 @@ Then open **http://localhost:5173**. API calls are proxied to the backend (confi
 
 - **Workflows list:** Open `/` to see all workflows. Use “Create workflow” or “Run” per row.
 - **Editor:** Open a workflow or “Create workflow” to use the canvas. Add nodes from the palette (LLM, Agent, Supervisor, Sequence, Parallel, Conditional), connect them with edges, select a node to edit fields in the side panel, and use “Set as entry” to mark the entry node. Save to create or update; Run (when the workflow is saved) opens a dialog to send input JSON and view the result.
+- **Per-subagent prompts:** For each `agent` node, you can set `role`, `systemMessage`, and `promptTemplate` in the node panel. `promptTemplate` supports placeholders from run input (for example `{{metadata.prompt}}`, `{{metadata.topic}}`, `{{metadata.style}}`).
 
 Errors from the API (e.g. validation) are shown in the UI; stack traces and PII are never exposed.
 

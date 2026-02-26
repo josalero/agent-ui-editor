@@ -3,7 +3,6 @@ package com.example.agenteditor.interpreter;
 import com.example.agenteditor.api.v1.dto.WorkflowNodeDto;
 import com.example.agenteditor.llm.StubChatModel;
 import com.example.agenteditor.llm.StubOpenRouterChatModelFactory;
-import com.example.agenteditor.interpreter.WorkflowRunnable;
 import com.example.agenteditor.tools.DefaultToolRegistry;
 import dev.langchain4j.agentic.scope.AgenticScope;
 import dev.langchain4j.invocation.LangChain4jManaged;
@@ -19,6 +18,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,13 +41,13 @@ class WorkflowGraphInterpreterTest {
         @DisplayName("builds runnable for story-like graph (llm + 2 agents + sequence)")
         void storyGraphReturnsRunnable() {
             List<WorkflowNodeDto> nodes = List.of(
-                    new WorkflowNodeDto("llm-1", "llm", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini",
+                    node("llm-1", "llm", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini",
                             null, null, null, null, null, null, null, null, null),
-                    new WorkflowNodeDto("writer", "agent", null, null, "llm-1", "CreativeWriter", "story",
+                    node("writer", "agent", null, null, "llm-1", "CreativeWriter", "story",
                             null, null, null, null, null, null),
-                    new WorkflowNodeDto("editor", "agent", null, null, "llm-1", "StyleEditor", "story",
+                    node("editor", "agent", null, null, "llm-1", "StyleEditor", "story",
                             null, null, null, null, null, null),
-                    new WorkflowNodeDto("seq-story", "sequence", null, null, null, null, "story",
+                    node("seq-story", "sequence", null, null, null, null, "story",
                             null, List.of("writer", "editor"), null, null, null, null)
             );
             WorkflowRunnable runnable = interpreter.buildEntryRunnable("seq-story", nodes);
@@ -58,8 +58,8 @@ class WorkflowGraphInterpreterTest {
         @DisplayName("agent with toolIds receives tools from registry")
         void agentWithToolIdsResolvesTools() {
             List<WorkflowNodeDto> nodes = List.of(
-                    new WorkflowNodeDto("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null),
-                    new WorkflowNodeDto("general", "agent", null, null, "llm-1", "GeneralExpert", "response",
+                    node("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null),
+                    node("general", "agent", null, null, "llm-1", "GeneralExpert", "response",
                             List.of("time", "calculator"), null, null, null, null, null)
             );
             WorkflowRunnable runnable = interpreter.buildEntryRunnable("general", nodes);
@@ -67,10 +67,27 @@ class WorkflowGraphInterpreterTest {
         }
 
         @Test
+        @DisplayName("parallel entry can return null even when sub-agents run")
+        void parallelEntryMayReturnNull() {
+            List<WorkflowNodeDto> nodes = List.of(
+                    node("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null),
+                    node("movies", "agent", null, null, "llm-1", "MovieExpert", "movies",
+                            null, null, null, null, null, null),
+                    node("meals", "agent", null, null, "llm-1", "MealExpert", "meals",
+                            null, null, null, null, null, null),
+                    node("parallel-plan", "parallel", null, null, null, null, "plan",
+                            null, List.of("movies", "meals"), null, null, null, 2)
+            );
+            WorkflowRunnable runnable = interpreter.buildEntryRunnable("parallel-plan", nodes);
+            Object result = runnable.run(Map.of("metadata", Map.of("prompt", "Suggest an evening plan", "mood", "cozy")));
+            assertNull(result);
+        }
+
+        @Test
         @DisplayName("throws when entry node is not agent or sequence")
         void throwsWhenEntryIsLlm() {
             List<WorkflowNodeDto> nodes = List.of(
-                    new WorkflowNodeDto("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null)
+                    node("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null)
             );
             IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                     () -> interpreter.buildEntryRunnable("llm-1", nodes));
@@ -82,8 +99,8 @@ class WorkflowGraphInterpreterTest {
         @DisplayName("throws when entry node not found")
         void throwsWhenEntryNotFound() {
             List<WorkflowNodeDto> nodes = List.of(
-                    new WorkflowNodeDto("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null),
-                    new WorkflowNodeDto("agent1", "agent", null, null, "llm-1", "A", null, null, null, null, null, null, null)
+                    node("llm-1", "llm", null, null, null, null, null, null, null, null, null, null, null),
+                    node("agent1", "agent", null, null, "llm-1", "A", null, null, null, null, null, null, null)
             );
             IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                     () -> interpreter.buildEntryRunnable("missing", nodes));
@@ -103,6 +120,33 @@ class WorkflowGraphInterpreterTest {
             } finally {
                 LangChain4jManaged.removeCurrent();
             }
+        }
+
+        @Test
+        @DisplayName("resolves prompt from promptTemplate placeholders")
+        void resolvesPromptFromTemplatePlaceholders() throws Exception {
+            Method method = WorkflowGraphInterpreter.class.getDeclaredMethod("userMessageFromScope", Object.class, String.class);
+            method.setAccessible(true);
+            String template = "Task: {{metadata.prompt}}\nTopic: {{metadata.topic}}\nStyle: {{metadata.style}}";
+            String resolved = (String) method.invoke(
+                    interpreter,
+                    Map.of("metadata", Map.of("prompt", "Write a short story.", "topic", "robot in Paris", "style", "noir")),
+                    template
+            );
+            assertEquals("Task: Write a short story.\nTopic: robot in Paris\nStyle: noir", resolved);
+        }
+
+        @Test
+        @DisplayName("falls back to metadata prompt when template variables are missing")
+        void fallsBackToMetadataPromptWhenTemplateVariablesMissing() throws Exception {
+            Method method = WorkflowGraphInterpreter.class.getDeclaredMethod("userMessageFromScope", Object.class, String.class);
+            method.setAccessible(true);
+            String resolved = (String) method.invoke(
+                    interpreter,
+                    Map.of("metadata", Map.of("prompt", "Use this fallback prompt.")),
+                    "{{metadata.missing}}"
+            );
+            assertEquals("Use this fallback prompt.", resolved);
         }
     }
 
@@ -158,5 +202,40 @@ class WorkflowGraphInterpreterTest {
             return '\0';
         }
         return null;
+    }
+
+    private static WorkflowNodeDto node(
+            String id,
+            String type,
+            String baseUrl,
+            String modelName,
+            String llmId,
+            String name,
+            String outputKey,
+            List<String> toolIds,
+            List<String> subAgentIds,
+            String responseStrategy,
+            String routerAgentId,
+            List<com.example.agenteditor.api.v1.dto.ConditionalBranchDto> branches,
+            Integer threadPoolSize
+    ) {
+        return new WorkflowNodeDto(
+                id,
+                type,
+                baseUrl,
+                modelName,
+                llmId,
+                name,
+                null,
+                null,
+                null,
+                outputKey,
+                toolIds,
+                subAgentIds,
+                responseStrategy,
+                routerAgentId,
+                branches,
+                threadPoolSize
+        );
     }
 }

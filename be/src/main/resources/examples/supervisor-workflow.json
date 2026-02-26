@@ -1,1 +1,57 @@
-{"name":"Supervisor workflow","entryNodeId":"sup","nodes":[{"id":"llm-1","type":"llm","baseUrl":"https://openrouter.ai/api/v1","modelName":"openai/gpt-4o-mini"},{"id":"assistant","type":"agent","llmId":"llm-1","name":"Assistant","outputKey":"response","toolIds":["time","calculator"]},{"id":"writer","type":"agent","llmId":"llm-1","name":"Writer","outputKey":"story"},{"id":"editor","type":"agent","llmId":"llm-1","name":"Editor","outputKey":"story"},{"id":"seq-story","type":"sequence","subAgentIds":["writer","editor"],"outputKey":"story"},{"id":"movies","type":"agent","llmId":"llm-1","name":"MovieExpert","outputKey":"movies"},{"id":"meals","type":"agent","llmId":"llm-1","name":"MealExpert","outputKey":"meals"},{"id":"parallel-plan","type":"parallel","subAgentIds":["movies","meals"],"outputKey":"plan"},{"id":"sup","type":"supervisor","llmId":"llm-1","subAgentIds":["assistant","seq-story","parallel-plan"],"responseStrategy":"LAST"}]}
+{
+  "name": "Supervisor workflow",
+  "entryNodeId": "sup",
+  "nodes": [
+    { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
+    {
+      "id": "assistant",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "Assistant",
+      "role": "General assistant",
+      "promptTemplate": "Help with: {{metadata.prompt}}",
+      "outputKey": "response",
+      "toolIds": ["time", "calculator"]
+    },
+    {
+      "id": "writer",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "Writer",
+      "role": "Story writer",
+      "promptTemplate": "Write a short story about {{metadata.topic}} in {{metadata.style}} style.",
+      "outputKey": "story"
+    },
+    {
+      "id": "editor",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "Editor",
+      "role": "Story editor",
+      "systemMessage": "Polish prose without changing intent.",
+      "promptTemplate": "Edit for style and clarity.",
+      "outputKey": "story"
+    },
+    { "id": "seq-story", "type": "sequence", "subAgentIds": ["writer", "editor"], "outputKey": "story" },
+    {
+      "id": "movies",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "MovieExpert",
+      "role": "Movie recommender",
+      "promptTemplate": "Suggest one movie for a {{metadata.mood}} mood.",
+      "outputKey": "movies"
+    },
+    {
+      "id": "meals",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "MealExpert",
+      "role": "Meal recommender",
+      "promptTemplate": "Suggest one dinner idea for a {{metadata.mood}} mood.",
+      "outputKey": "meals"
+    },
+    { "id": "parallel-plan", "type": "parallel", "subAgentIds": ["movies", "meals"], "outputKey": "plan" },
+    { "id": "sup", "type": "supervisor", "llmId": "llm-1", "subAgentIds": ["assistant", "seq-story", "parallel-plan"], "responseStrategy": "LAST", "outputKey": "response" }
+  ]
+}

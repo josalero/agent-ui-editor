@@ -6,6 +6,7 @@ import type { NodeData } from '../editor/nodeData'
 import { getDependencies } from '../editor/dependencies'
 import { getAvailableTools } from '../api/client'
 import type { AvailableTool } from '../api/types'
+const { TextArea } = Input
 
 interface NodeConfigPanelProps {
   node: Node<NodeData> | null
@@ -128,6 +129,35 @@ export default function NodeConfigPanel({ node, allNodes, allEdges, onUpdate, on
 
         {type === 'agent' && (
           <>
+            <div>
+              <label className="block text-slate-600 text-xs mb-1">Role</label>
+              <Input
+                value={data.role ?? ''}
+                onChange={(e) => update('role', e.target.value)}
+                placeholder="e.g. Creative writer"
+                size="small"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-600 text-xs mb-1">System message</label>
+              <TextArea
+                value={data.systemMessage ?? ''}
+                onChange={(e) => update('systemMessage', e.target.value)}
+                placeholder="Instruction for this sub-agent (optional)."
+                rows={3}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-600 text-xs mb-1">Prompt template</label>
+              <TextArea
+                value={data.promptTemplate ?? ''}
+                onChange={(e) => update('promptTemplate', e.target.value)}
+                placeholder="Use {{metadata.prompt}}, {{metadata.topic}}, etc."
+                rows={3}
+                className="font-mono text-xs"
+              />
+            </div>
             {availableTools.length > 0 && (
               <div>
                 <label className="block text-slate-600 text-xs mb-1">Available tools</label>

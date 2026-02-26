@@ -2,6 +2,7 @@ package com.example.agenteditor.llm;
 
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.FinishReason;
 
@@ -24,6 +25,14 @@ public class StubChatModel implements ChatModel {
 
     @Override
     public ChatResponse chat(List<dev.langchain4j.data.message.ChatMessage> messages) {
+        return ChatResponse.builder()
+                .aiMessage(AiMessage.from(fixedReply))
+                .finishReason(FinishReason.STOP)
+                .build();
+    }
+
+    @Override
+    public ChatResponse doChat(ChatRequest chatRequest) {
         return ChatResponse.builder()
                 .aiMessage(AiMessage.from(fixedReply))
                 .finishReason(FinishReason.STOP)

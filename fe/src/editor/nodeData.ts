@@ -10,6 +10,9 @@ export interface NodeData extends Record<string, unknown> {
   modelName?: string
   llmId?: string
   name?: string
+  role?: string
+  systemMessage?: string
+  promptTemplate?: string
   outputKey?: string
   toolIds?: string[]
   subAgentIds?: string[]
@@ -28,6 +31,9 @@ export function nodeDataToDto(data: NodeData): WorkflowNodeDto {
   if (data.modelName != null) dto.modelName = data.modelName
   if (data.llmId != null) dto.llmId = data.llmId
   if (data.name != null) dto.name = data.name
+  if (data.role != null) dto.role = data.role
+  if (data.systemMessage != null) dto.systemMessage = data.systemMessage
+  if (data.promptTemplate != null) dto.promptTemplate = data.promptTemplate
   if (data.outputKey != null) dto.outputKey = data.outputKey
   if (data.toolIds != null) dto.toolIds = data.toolIds
   if (data.subAgentIds != null) dto.subAgentIds = data.subAgentIds
@@ -48,6 +54,9 @@ export function dtoToNodeData(dto: WorkflowNodeDto, isEntry: boolean): NodeData 
     modelName: dto.modelName ?? undefined,
     llmId: dto.llmId ?? undefined,
     name: dto.name ?? undefined,
+    role: dto.role ?? undefined,
+    systemMessage: dto.systemMessage ?? undefined,
+    promptTemplate: dto.promptTemplate ?? undefined,
     outputKey: dto.outputKey ?? undefined,
     toolIds: dto.toolIds ?? undefined,
     subAgentIds: dto.subAgentIds ?? undefined,

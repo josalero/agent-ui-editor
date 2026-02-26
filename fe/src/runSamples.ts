@@ -27,7 +27,15 @@ const EVENING_PLAN_INPUT = JSON.stringify(
 )
 
 const EXPERT_ROUTER_INPUT = JSON.stringify(
-  { metadata: { prompt: 'What time is it right now? Tell me the current time.' } },
+  {
+    metadata: {
+      prompt:
+        'Create a practical 5-day execution plan to ship a landing page redesign. Include daily priorities, time blocks, and top risks.',
+      goal: 'Ship redesign by Friday',
+      constraints: '2 focused hours each evening',
+      preferredOutput: 'bullet checklist by day',
+    },
+  },
   null,
   2
 )

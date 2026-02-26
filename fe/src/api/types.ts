@@ -13,6 +13,9 @@ export interface WorkflowNodeDto {
   modelName?: string | null
   llmId?: string | null
   name?: string | null
+  role?: string | null
+  systemMessage?: string | null
+  promptTemplate?: string | null
   outputKey?: string | null
   toolIds?: string[] | null
   subAgentIds?: string[] | null

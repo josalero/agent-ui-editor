@@ -1,10 +1,50 @@
 {
   "name": "Evening plan workflow",
-  "entryNodeId": "parallel-plan",
+  "entryNodeId": "seq-evening",
   "nodes": [
     { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
-    { "id": "movies", "type": "agent", "llmId": "llm-1", "name": "MovieExpert", "outputKey": "movies" },
-    { "id": "meals", "type": "agent", "llmId": "llm-1", "name": "MealExpert", "outputKey": "meals" },
-    { "id": "parallel-plan", "type": "parallel", "subAgentIds": ["movies", "meals"], "outputKey": "plan", "threadPoolSize": 2 }
+    {
+      "id": "movies",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "MovieExpert",
+      "role": "Movie recommender",
+      "systemMessage": "Recommend only practical options with one-line rationale.",
+      "promptTemplate": "Suggest one movie for a {{metadata.mood}} evening.",
+      "outputKey": "movies"
+    },
+    {
+      "id": "meals",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "MealExpert",
+      "role": "Meal planner",
+      "systemMessage": "Recommend one dinner idea with simple ingredients.",
+      "promptTemplate": "Suggest one dinner idea for a {{metadata.mood}} evening.",
+      "outputKey": "meals"
+    },
+    {
+      "id": "parallel-plan",
+      "type": "parallel",
+      "subAgentIds": ["movies", "meals"],
+      "outputKey": "plan",
+      "threadPoolSize": 2
+    },
+    {
+      "id": "composer",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "PlanComposer",
+      "role": "Plan composer",
+      "systemMessage": "Merge options into one concise, actionable evening plan.",
+      "promptTemplate": "Movie option: {{movies}}\nDinner option: {{meals}}\nMood: {{metadata.mood}}\nCreate one final evening plan.",
+      "outputKey": "response"
+    },
+    {
+      "id": "seq-evening",
+      "type": "sequence",
+      "subAgentIds": ["parallel-plan", "composer"],
+      "outputKey": "response"
+    }
   ]
 }

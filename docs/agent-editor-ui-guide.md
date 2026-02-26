@@ -94,7 +94,10 @@ The editor uses a **three-column layout** similar to n8n:
 - **Click** a node on the canvas to select it.
 - The **right panel** shows **Node configuration** with:
   - **ID** — unique identifier (used in connections and as entry).
-  - **Type-specific fields** — e.g. for LLM: Base URL, Model; for Agent: Name, LLM ID, Output key, Tool IDs; etc.
+  - **Type-specific fields** — e.g. for LLM: Base URL, Model; for Agent: Name, LLM ID, Output key, Tool IDs, plus:
+    - **Role** — short role label for that agent.
+    - **System message** — system instruction for that specific agent/sub-agent.
+    - **Prompt template** — per-agent prompt template. Supports placeholders like `{{metadata.prompt}}`, `{{metadata.topic}}`, `{{metadata.style}}`.
 - **Set as entry** — mark this node as the one that runs when you click **Run**. Exactly one node should be the entry (usually a Sequence, Parallel, Conditional, or Supervisor).
 - **Delete node** — remove this node from the canvas (and any edges to/from it). You can also select the node and press **Delete** or **Backspace**.
 

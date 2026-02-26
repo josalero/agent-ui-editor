@@ -3,15 +3,54 @@
   "entryNodeId": "seq-route",
   "nodes": [
     { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
-    { "id": "router", "type": "agent", "llmId": "llm-1", "name": "CategoryRouter", "outputKey": "category" },
-    { "id": "general", "type": "agent", "llmId": "llm-1", "name": "GeneralExpert", "outputKey": "response", "toolIds": ["time", "calculator"] },
-    { "id": "creative", "type": "agent", "llmId": "llm-1", "name": "CreativeExpert", "outputKey": "response" },
-    { "id": "planning", "type": "agent", "llmId": "llm-1", "name": "PlanningExpert", "outputKey": "response" },
-    { "id": "cond", "type": "conditional", "routerAgentId": "router", "branches": [
-      { "conditionKey": "category", "value": "GENERAL", "agentId": "general" },
-      { "conditionKey": "category", "value": "CREATIVE", "agentId": "creative" },
-      { "conditionKey": "category", "value": "PLANNING", "agentId": "planning" }
-    ]},
+    {
+      "id": "router",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "CategoryRouter",
+      "role": "Intent router",
+      "systemMessage": "Output only one category token: GENERAL, CREATIVE, or PLANNING.",
+      "promptTemplate": "Classify this request: {{metadata.prompt}}",
+      "outputKey": "category"
+    },
+    {
+      "id": "general",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "GeneralExpert",
+      "role": "General assistant",
+      "promptTemplate": "Answer clearly: {{metadata.prompt}}",
+      "outputKey": "response",
+      "toolIds": ["time", "calculator"]
+    },
+    {
+      "id": "creative",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "CreativeExpert",
+      "role": "Creative specialist",
+      "promptTemplate": "Respond creatively to: {{metadata.prompt}}",
+      "outputKey": "response"
+    },
+    {
+      "id": "planning",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "PlanningExpert",
+      "role": "Planning specialist",
+      "promptTemplate": "Create a practical plan for: {{metadata.prompt}}",
+      "outputKey": "response"
+    },
+    {
+      "id": "cond",
+      "type": "conditional",
+      "routerAgentId": "router",
+      "branches": [
+        { "conditionKey": "category", "value": "GENERAL", "agentId": "general" },
+        { "conditionKey": "category", "value": "CREATIVE", "agentId": "creative" },
+        { "conditionKey": "category", "value": "PLANNING", "agentId": "planning" }
+      ]
+    },
     { "id": "seq-route", "type": "sequence", "subAgentIds": ["router", "cond"], "outputKey": "response" }
   ]
 }

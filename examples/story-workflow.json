@@ -3,8 +3,26 @@
   "entryNodeId": "seq-story",
   "nodes": [
     { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
-    { "id": "writer", "type": "agent", "llmId": "llm-1", "name": "CreativeWriter", "outputKey": "story" },
-    { "id": "editor", "type": "agent", "llmId": "llm-1", "name": "StyleEditor", "outputKey": "story" },
+    {
+      "id": "writer",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "CreativeWriter",
+      "role": "Story writer",
+      "systemMessage": "You write concise, vivid first drafts.",
+      "promptTemplate": "Write a short story (2-3 paragraphs) about {{metadata.topic}} in {{metadata.style}} style.",
+      "outputKey": "story"
+    },
+    {
+      "id": "editor",
+      "type": "agent",
+      "llmId": "llm-1",
+      "name": "StyleEditor",
+      "role": "Story editor",
+      "systemMessage": "You edit for clarity, rhythm, and tone while preserving intent.",
+      "promptTemplate": "Refine the draft with a stronger {{metadata.style}} tone. Keep it tight and polished.",
+      "outputKey": "story"
+    },
     { "id": "seq-story", "type": "sequence", "subAgentIds": ["writer", "editor"], "outputKey": "story" }
   ]
 }

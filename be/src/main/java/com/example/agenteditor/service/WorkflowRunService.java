@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,7 +48,42 @@ public class WorkflowRunService {
         log.info("Executing workflow id={}", workflowId);
         Object result = runnable.run(runInput);
         String resultStr = result != null ? result.toString() : "";
+        if (resultStr.isBlank()) {
+            String fallback = fallbackResultForEmptyOutput(entryNodeId, nodes, runInput);
+            if (!fallback.isBlank()) {
+                resultStr = fallback;
+            }
+        }
         log.info("Workflow run completed id={} resultLength={}", workflowId, resultStr.length());
         return new RunWorkflowResponse(resultStr);
+    }
+
+    private String fallbackResultForEmptyOutput(String entryNodeId, List<WorkflowNodeDto> nodes, Map<String, Object> runInput) {
+        if (nodes == null || nodes.isEmpty()) {
+            return "";
+        }
+        WorkflowNodeDto entry = nodes.stream()
+                .filter(n -> entryNodeId.equals(n.id()))
+                .findFirst()
+                .orElse(null);
+        if (entry == null) {
+            return "";
+        }
+        String outputKey = entry.outputKey();
+        if (outputKey != null && !outputKey.isBlank() && runInput != null) {
+            Object value = runInput.get(outputKey);
+            if (value != null && !value.toString().isBlank()) {
+                log.info("Run fallback: returning value from entry outputKey={} length={}", outputKey, value.toString().length());
+                return value.toString();
+            }
+        }
+        if ("parallel".equalsIgnoreCase(entry.type())) {
+            List<String> availableKeys = runInput != null ? new ArrayList<>(runInput.keySet()) : List.of();
+            String message = "Workflow completed, but parallel entry node '" + entry.id() + "' returned no direct text output."
+                    + " Add a final agent in a sequence/supervisor to compose sub-agent outputs.";
+            log.warn("Run fallback: {}", message + " availableInputKeys=" + availableKeys);
+            return message;
+        }
+        return "";
     }
 }

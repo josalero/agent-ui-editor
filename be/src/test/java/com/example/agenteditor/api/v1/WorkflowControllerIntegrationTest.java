@@ -72,8 +72,8 @@ class WorkflowControllerIntegrationTest {
               "entryNodeId": "seq-story",
               "nodes": [
                 { "id": "llm-1", "type": "llm", "baseUrl": "https://openrouter.ai/api/v1", "modelName": "openai/gpt-4o-mini" },
-                { "id": "writer", "type": "agent", "llmId": "llm-1", "name": "CreativeWriter", "outputKey": "story" },
-                { "id": "editor", "type": "agent", "llmId": "llm-1", "name": "StyleEditor", "outputKey": "story" },
+                { "id": "writer", "type": "agent", "llmId": "llm-1", "name": "CreativeWriter", "role": "Story writer", "promptTemplate": "Write about {{metadata.topic}} in {{metadata.style}} style.", "outputKey": "story" },
+                { "id": "editor", "type": "agent", "llmId": "llm-1", "name": "StyleEditor", "role": "Story editor", "systemMessage": "Edit for clarity and tone.", "promptTemplate": "Refine the draft.", "outputKey": "story" },
                 { "id": "seq-story", "type": "sequence", "subAgentIds": ["writer", "editor"], "outputKey": "story" }
               ]
             }
@@ -196,7 +196,7 @@ class WorkflowControllerIntegrationTest {
             ResponseEntity<Map> resp = restTemplate.exchange(
                     baseUrl() + "/" + randomId + "/run",
                     HttpMethod.POST,
-                    new HttpEntity<>(Map.of("topic", "test", "style", "noir"), headers),
+                    new HttpEntity<>(Map.of("metadata", Map.of("prompt", "test prompt", "topic", "test", "style", "noir")), headers),
                     new ParameterizedTypeReference<>() {}
             );
             assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -221,7 +221,7 @@ class WorkflowControllerIntegrationTest {
             ResponseEntity<Map> runResp = restTemplate.exchange(
                     baseUrl() + "/" + id + "/run",
                     HttpMethod.POST,
-                    new HttpEntity<>(Map.of("topic", "a robot", "style", "noir"), headers),
+                    new HttpEntity<>(Map.of("metadata", Map.of("prompt", "Write a short story", "topic", "a robot", "style", "noir")), headers),
                     new ParameterizedTypeReference<>() {}
             );
             assertThat(runResp.getStatusCode()).isIn(HttpStatus.OK, HttpStatus.INTERNAL_SERVER_ERROR);
